@@ -1,206 +1,208 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
-import {
-  format,
-  startOfMonth,
-  endOfMonth,
-  eachDayOfInterval,
-  isSameDay,
-  differenceInDays,
-  addMonths,
-  subMonths,
-  parseISO,
-  isToday,
-  getDay,
-} from 'date-fns';
-import {
-  Calendar,
-  AlertTriangle,
-  Clock,
-  Package,
-  IndianRupee,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  ChevronUp,
-  Filter,
-  X,
-} from 'lucide-react';
 import { db } from '../../config/firebase';
 import type { Drug, Batch } from '../../types';
+import {
+  addMonths,
+  differenceInDays,
+  eachDayOfInterval,
+  endOfMonth,
+  format,
+  isSameDay,
+  isToday,
+  parseISO,
+  startOfMonth,
+  startOfToday,
+  subMonths,
+} from 'date-fns';
+import {
+  AlertTriangle,
+  Calendar,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Clock,
+  Filter,
+  Package,
+  X,
+} from 'lucide-react';
 
-// ── Local types ───────────────────────────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────────────────────
 
 interface FlatBatch {
-  drugId:          string;
-  drugName:        string;
-  drugCategory:    string;
-  batchNumber:     string;
-  quantity:        number;
-  expiryDate:      string;   // 'YYYY-MM-DD'
-  costPerUnit:     number;
-  daysUntilExpiry: number;   // negative = already expired
-  valueAtRisk:     number;   // quantity × costPerUnit
+  drugId: string;
+  drugName: string;
+  drugCategory: string;
+  batchId: string;
+  batchNumber: string;
+  quantity: number;
+  expiryDate: string;       // ISO string, e.g. "2025-10-15"
+  costPerUnit: number;
+  daysUntilExpiry: number;  // negative = already expired
+  valueAtRisk: number;      // quantity × costPerUnit
 }
 
 type UrgencyFilter = 'all' | 'expired' | '7' | '30' | '90';
 
-// ── Pure helpers ──────────────────────────────────────────────────────────────
+// ─── Constants ─────────────────────────────────────────────────────────────
 
-const TODAY = new Date();
-TODAY.setHours(0, 0, 0, 0);
+const TODAY = startOfToday();
 
-function calcDays(expiryDate: string): number {
-  try {
-    return differenceInDays(parseISO(expiryDate), TODAY);
-  } catch {
-    return 9999;
-  }
+const URGENCY_OPTS: {
+  val: UrgencyFilter;
+  label: string;
+  active: string;
+  inactive: string;
+}[] = [
+  { val: 'all',     label: 'All',       active: 'bg-gray-700 text-white',     inactive: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
+  { val: 'expired', label: 'Expired',   active: 'bg-red-600 text-white',      inactive: 'bg-red-50 text-red-600 hover:bg-red-100' },
+  { val: '7',       label: '< 7 Days',  active: 'bg-orange-500 text-white',   inactive: 'bg-orange-50 text-orange-600 hover:bg-orange-100' },
+  { val: '30',      label: '< 30 Days', active: 'bg-yellow-500 text-white',   inactive: 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100' },
+  { val: '90',      label: '< 90 Days', active: 'bg-green-600 text-white',    inactive: 'bg-green-50 text-green-600 hover:bg-green-100' },
+];
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const LEGEND = [
+  ['bg-red-500',    'Expired / Today'],
+  ['bg-orange-400', '< 7 days'],
+  ['bg-yellow-300', '< 30 days'],
+  ['bg-green-300',  '< 90 days'],
+  ['bg-sky-200',    '> 90 days'],
+] as const;
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+/** Format a number as Indian locale integer (no decimals). */
+const inr = (n: number) =>
+  new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(n);
+
+/** Monday-first leading empty cells for the month start. */
+function weekPad(d: Date): number {
+  const dow = d.getDay(); // 0 = Sunday
+  return dow === 0 ? 6 : dow - 1;
 }
 
-/** Left-pad days to align week to Mon=0 … Sun=6 */
-function weekPad(monthStart: Date): number {
-  const d = getDay(monthStart); // 0=Sun … 6=Sat
-  return d === 0 ? 6 : d - 1;
-}
-
-/** Cell background colour driven by urgency of the nearest-expiring batch. */
+/** Background class for a calendar cell based on urgency + batch count intensity. */
 function cellBg(batches: FlatBatch[]): string {
-  if (batches.length === 0) return '';
-  const min  = Math.min(...batches.map(b => b.daysUntilExpiry));
-  const rank = Math.min(batches.length, 3); // 1, 2 or 3+
+  if (!batches.length) return '';
+  const min = Math.min(...batches.map(b => b.daysUntilExpiry));
+  const idx = Math.min(batches.length, 3) - 1; // 0 | 1 | 2
 
-  const shades: Record<string, string[]> = {
-    red:    ['bg-red-400',    'bg-red-500',    'bg-red-600'],
-    orange: ['bg-orange-300', 'bg-orange-400', 'bg-orange-500'],
-    yellow: ['bg-yellow-300', 'bg-yellow-400', 'bg-yellow-500'],
-    green:  ['bg-green-300',  'bg-green-400',  'bg-green-500'],
-  };
-
-  const key = min <= 0 ? 'red' : min < 7 ? 'orange' : min < 30 ? 'yellow' : 'green';
-  return shades[key][rank - 1];
+  if (min <= 0)  return ['bg-red-400',    'bg-red-500',    'bg-red-600'   ][idx];
+  if (min <= 7)  return ['bg-orange-300', 'bg-orange-400', 'bg-orange-500'][idx];
+  if (min <= 30) return ['bg-yellow-200', 'bg-yellow-300', 'bg-yellow-400'][idx];
+  if (min <= 90) return ['bg-green-200',  'bg-green-300',  'bg-green-400' ][idx];
+  return               ['bg-sky-100',    'bg-sky-200',    'bg-sky-300'   ][idx];
 }
 
-/** Text colour for urgency labels. */
-function urgencyTextColor(days: number): string {
-  if (days < 0)  return 'text-red-600';
-  if (days < 7)  return 'text-orange-600';
-  if (days < 30) return 'text-yellow-600';
-  if (days < 90) return 'text-green-600';
-  return 'text-slate-500';
+function statusInfo(days: number): { label: string; cls: string } {
+  if (days <= 0)  return { label: 'EXPIRED',  cls: 'bg-red-100 text-red-700 border border-red-200' };
+  if (days <= 7)  return { label: 'CRITICAL', cls: 'bg-orange-100 text-orange-700 border border-orange-200' };
+  if (days <= 30) return { label: 'WARNING',  cls: 'bg-yellow-100 text-yellow-700 border border-yellow-200' };
+  return               { label: 'OK',        cls: 'bg-green-100 text-green-700 border border-green-200' };
 }
 
-/** Badge classes for table status column. */
-function statusBadge(days: number): string {
-  if (days < 0)  return 'bg-red-100 text-red-700 border border-red-200';
-  if (days < 7)  return 'bg-orange-100 text-orange-700 border border-orange-200';
-  if (days < 30) return 'bg-yellow-100 text-yellow-700 border border-yellow-200';
-  return 'bg-green-100 text-green-700 border border-green-200';
+// ─── StatCard ──────────────────────────────────────────────────────────────
+
+interface StatCardProps {
+  icon: ReactNode;
+  label: string;
+  count: number;
+  sub: string;
+  border: string;
+  countCls: string;
 }
 
-function statusLabel(days: number): string {
-  if (days < 0)  return 'EXPIRED';
-  if (days < 7)  return 'CRITICAL';
-  if (days < 30) return 'WARNING';
-  return 'OK';
-}
-
-function formatRupees(amount: number): string {
-  return `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-}
-
-// ── Skeleton ──────────────────────────────────────────────────────────────────
-
-function Skeleton({ className }: { className?: string }) {
-  return <div className={`animate-pulse bg-slate-100 rounded-lg ${className ?? ''}`} />;
-}
-
-function PageSkeleton() {
+function StatCard({ icon, label, count, sub, border, countCls }: StatCardProps) {
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <Skeleton className="h-8 w-56 mb-2" />
-      <Skeleton className="h-4 w-72 mb-6" />
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20" />)}
+    <div className={`bg-white rounded-xl border ${border} shadow-sm p-4`}>
+      <div className="flex items-center gap-2 mb-1">
+        {icon}
+        <span className="text-xs font-medium text-gray-500">{label}</span>
       </div>
-      <Skeleton className="h-12 mb-4" />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-64" />)}
-      </div>
+      <p className={`text-2xl font-bold ${countCls}`}>{count}</p>
+      <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
     </div>
   );
 }
 
-// ── Month calendar grid ────────────────────────────────────────────────────────
+// ─── MonthGrid ─────────────────────────────────────────────────────────────
 
 interface MonthGridProps {
-  month:          Date;
-  batchesByDay:   Map<string, FlatBatch[]>;
-  selectedDate:   Date | null;
-  onSelectDate:   (d: Date) => void;
+  monthStart: Date;
+  byDay: Record<string, FlatBatch[]>;
+  selectedDay: Date | null;
+  onSelect: (d: Date) => void;
 }
 
-function MonthGrid({ month, batchesByDay, selectedDate, onSelectDate }: MonthGridProps) {
-  const days    = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) });
-  const padCells = weekPad(days[0]);
-  const DOW_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function MonthGrid({ monthStart, byDay, selectedDay, onSelect }: MonthGridProps) {
+  const days = eachDayOfInterval({ start: monthStart, end: endOfMonth(monthStart) });
+  const pad  = weekPad(monthStart);
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-      {/* Month name */}
-      <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">
-        {format(month, 'MMMM yyyy')}
+    <div className="flex-1 min-w-[260px]">
+      {/* Month title */}
+      <h3 className="text-center text-sm font-semibold text-gray-600 mb-2">
+        {format(monthStart, 'MMMM yyyy')}
       </h3>
 
-      {/* Day-of-week header */}
-      <div className="grid grid-cols-7 mb-1">
-        {DOW_LABELS.map(d => (
-          <div key={d} className="text-center text-[10px] font-semibold text-slate-400 py-1">
-            {d}
+      {/* Day-of-week headers */}
+      <div className="grid grid-cols-7 gap-0.5 mb-1">
+        {DAY_LABELS.map(l => (
+          <div key={l} className="text-center text-[10px] font-medium text-gray-400 py-1">
+            {l}
           </div>
         ))}
       </div>
 
       {/* Day cells */}
       <div className="grid grid-cols-7 gap-0.5">
-        {/* Pad empty cells before the 1st */}
-        {[...Array(padCells)].map((_, i) => <div key={`pad-${i}`} />)}
+        {/* Leading empty cells */}
+        {Array.from({ length: pad }).map((_, i) => <div key={`p${i}`} />)}
 
         {days.map(day => {
           const key      = format(day, 'yyyy-MM-dd');
-          const dayBatch = batchesByDay.get(key) ?? [];
-          const bg       = cellBg(dayBatch);
-          const isSelected = selectedDate && isSameDay(day, selectedDate);
-          const todayDay   = isToday(day);
-          const totalVal   = dayBatch.reduce((s, b) => s + b.valueAtRisk, 0);
+          const batches  = byDay[key] ?? [];
+          const bg       = cellBg(batches);
+          const selected = selectedDay ? isSameDay(day, selectedDay) : false;
+          const todayDay = isToday(day);
+          const totalVal = batches.reduce((s, b) => s + b.valueAtRisk, 0);
 
           return (
-            <div key={key} className="group relative">
+            <div key={key} className="relative group">
               <button
-                onClick={() => onSelectDate(day)}
+                onClick={() => onSelect(day)}
                 className={[
-                  'w-full aspect-square flex items-center justify-center rounded-md text-xs font-medium transition-all',
-                  bg || 'hover:bg-slate-100',
-                  bg ? 'text-white hover:brightness-90' : 'text-slate-600',
-                  isSelected  ? 'ring-2 ring-blue-500 ring-offset-1' : '',
-                  todayDay    ? 'ring-2 ring-slate-400 ring-offset-1' : '',
+                  'relative w-full aspect-square min-h-[34px] rounded-md',
+                  'flex items-center justify-center text-[11px] font-medium transition-all',
+                  bg || 'bg-gray-50 hover:bg-gray-100',
+                  batches.length ? 'text-gray-900' : 'text-gray-400',
+                  selected ? 'ring-2 ring-blue-500 ring-offset-1 scale-105 shadow-sm' : '',
+                  todayDay && !selected ? 'ring-2 ring-blue-300' : '',
                 ].filter(Boolean).join(' ')}
               >
                 {format(day, 'd')}
-                {dayBatch.length > 1 && (
-                  <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/70" />
+                {batches.length > 1 && (
+                  <span className="absolute top-0.5 right-0.5 text-[7px] font-bold leading-none opacity-80">
+                    {batches.length}
+                  </span>
                 )}
               </button>
 
               {/* Hover tooltip */}
-              {dayBatch.length > 0 && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-30 hidden group-hover:block pointer-events-none">
-                  <div className="bg-slate-800 text-white text-[10px] rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
-                    <p className="font-semibold">{format(day, 'dd MMM')}</p>
-                    <p>{dayBatch.length} batch{dayBatch.length !== 1 ? 'es' : ''} expiring</p>
-                    {totalVal > 0 && <p className="text-yellow-300">{formatRupees(totalVal)} at risk</p>}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+              {batches.length > 0 && (
+                <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block pointer-events-none w-max">
+                  <div className="bg-gray-900 text-white rounded-lg px-3 py-2 text-xs shadow-xl">
+                    <div className="font-semibold mb-0.5">{format(day, 'dd MMM yyyy')}</div>
+                    <div className="text-gray-300">
+                      {batches.length} batch{batches.length > 1 ? 'es' : ''} expiring
+                    </div>
+                    <div className="text-orange-300 font-medium">₹{inr(totalVal)} at risk</div>
                   </div>
+                  <div className="w-2.5 h-2.5 bg-gray-900 rotate-45 mx-auto -mt-1.5" />
                 </div>
               )}
             </div>
@@ -211,520 +213,515 @@ function MonthGrid({ month, batchesByDay, selectedDate, onSelectDate }: MonthGri
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ─── Main Page ─────────────────────────────────────────────────────────────
 
 export default function HeatmapPage() {
+  const [allBatches,  setAllBatches]  = useState<FlatBatch[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [windowStart, setWindowStart] = useState(startOfMonth(TODAY));
+  const [drugFilter,  setDrugFilter]  = useState('all');
+  const [catFilter,   setCatFilter]   = useState('all');
+  const [urgency,     setUrgency]     = useState<UrgencyFilter>('all');
+  const [tableOpen,   setTableOpen]   = useState(false);
+  const [sortAsc,     setSortAsc]     = useState(true);
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  const [allBatches, setAllBatches] = useState<FlatBatch[]>([]);
-  const [loading, setLoading]       = useState(true);
-
-  const [viewMonth, setViewMonth]   = useState<Date>(startOfMonth(new Date()));
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-
-  const [filterDrug,     setFilterDrug]     = useState('all');
-  const [filterCategory, setFilterCategory] = useState('all');
-  const [filterUrgency,  setFilterUrgency]  = useState<UrgencyFilter>('all');
-
-  const [showTable, setShowTable]   = useState(false);
-  const [tableSortAsc, setTableSortAsc] = useState(true);
-
-  // ── Data loading ────────────────────────────────────────────────────────────
+  // ── Load data ───────────────────────────────────────────────────────────
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-
-    async function load() {
+    (async () => {
+      setLoading(true);
       try {
-        const drugsSnap = await getDocs(collection(db, 'drugs'));
-        const drugs: Drug[] = drugsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Drug));
+        const drugSnaps = await getDocs(collection(db, 'drugs'));
+        const drugs = drugSnaps.docs.map(d => ({ id: d.id, ...d.data() } as Drug));
 
-        // Fetch all batch subcollections in parallel
-        const batchResults = await Promise.all(
+        const flat: FlatBatch[] = [];
+
+        await Promise.all(
           drugs.map(async drug => {
-            const snap = await getDocs(collection(db, 'drugs', drug.id, 'batches'));
-            return snap.docs.map(d => {
-              const b = { id: d.id, ...d.data() } as Batch & { id: string };
-              return {
+            const bSnaps = await getDocs(collection(db, 'drugs', drug.id, 'batches'));
+            bSnaps.docs.forEach(bd => {
+              const b = { id: bd.id, ...bd.data() } as Batch;
+              if (b.quantity === 0) return; // skip depleted
+              flat.push({
                 drugId:          drug.id,
                 drugName:        drug.name,
                 drugCategory:    drug.category,
+                batchId:         b.id,
                 batchNumber:     b.batchNumber,
                 quantity:        b.quantity,
                 expiryDate:      b.expiryDate,
                 costPerUnit:     b.costPerUnit,
-                daysUntilExpiry: calcDays(b.expiryDate),
-                valueAtRisk:     Math.round(b.quantity * b.costPerUnit),
-              } satisfies FlatBatch;
+                daysUntilExpiry: differenceInDays(parseISO(b.expiryDate), TODAY),
+                valueAtRisk:     b.quantity * b.costPerUnit,
+              });
             });
-          }),
+          })
         );
 
-        if (cancelled) return;
-
-        const flat = batchResults.flat()
-          .filter(b => b.quantity > 0)           // skip depleted
-          .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
-
+        flat.sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
         setAllBatches(flat);
-      } catch (err) {
-        console.error('Heatmap load error:', err);
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
-    }
-
-    load();
-    return () => { cancelled = true; };
+    })();
   }, []);
 
-  // ── Derived filter options ─────────────────────────────────────────────────
-  const drugs      = useMemo(() => {
-    const seen = new Map<string, string>();
-    allBatches.forEach(b => seen.set(b.drugId, b.drugName));
-    return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  // ── Derived filter options ──────────────────────────────────────────────
+  const drugOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    allBatches.forEach(b => map.set(b.drugId, b.drugName));
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [allBatches]);
 
-  const categories = useMemo(() => {
-    const s = new Set(allBatches.map(b => b.drugCategory));
-    return [...s].sort();
-  }, [allBatches]);
+  const catOptions = useMemo(
+    () => [...new Set(allBatches.map(b => b.drugCategory))].sort(),
+    [allBatches]
+  );
 
-  // ── Filtered batches ───────────────────────────────────────────────────────
+  // ── Apply filters ───────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return allBatches.filter(b => {
-      if (filterDrug !== 'all' && b.drugId !== filterDrug) return false;
-      if (filterCategory !== 'all' && b.drugCategory !== filterCategory) return false;
-      if (filterUrgency === 'expired' && b.daysUntilExpiry >= 0) return false;
-      if (filterUrgency === '7'       && (b.daysUntilExpiry < 0 || b.daysUntilExpiry >= 7))  return false;
-      if (filterUrgency === '30'      && (b.daysUntilExpiry < 0 || b.daysUntilExpiry >= 30)) return false;
-      if (filterUrgency === '90'      && (b.daysUntilExpiry < 0 || b.daysUntilExpiry >= 90)) return false;
+      if (drugFilter !== 'all' && b.drugId !== drugFilter)         return false;
+      if (catFilter  !== 'all' && b.drugCategory !== catFilter)    return false;
+      if (urgency === 'expired' && b.daysUntilExpiry > 0)          return false;
+      if (urgency === '7'       && b.daysUntilExpiry > 7)          return false;
+      if (urgency === '30'      && b.daysUntilExpiry > 30)         return false;
+      if (urgency === '90'      && b.daysUntilExpiry > 90)         return false;
       return true;
     });
-  }, [allBatches, filterDrug, filterCategory, filterUrgency]);
+  }, [allBatches, drugFilter, catFilter, urgency]);
+
+  /** Lookup map: "yyyy-MM-dd" → FlatBatch[] (used by calendar cells) */
+  const byDay = useMemo(() => {
+    const m: Record<string, FlatBatch[]> = {};
+    filtered.forEach(b => {
+      const k = b.expiryDate.slice(0, 10);
+      (m[k] ??= []).push(b);
+    });
+    return m;
+  }, [filtered]);
+
+  // ── Summary stats (always from unfiltered allBatches) ──────────────────
+  const stats = useMemo(() => {
+    const expired = allBatches.filter(b => b.daysUntilExpiry <= 0);
+    const week7   = allBatches.filter(b => b.daysUntilExpiry > 0  && b.daysUntilExpiry <= 7);
+    const month30 = allBatches.filter(b => b.daysUntilExpiry > 7  && b.daysUntilExpiry <= 30);
+    const safe    = allBatches.filter(b => b.daysUntilExpiry > 90);
+    return {
+      expiredCount: expired.length,
+      expiredVal:   expired.reduce((s, b) => s + b.valueAtRisk, 0),
+      weekCount:    week7.length,
+      weekVal:      week7.reduce((s, b) => s + b.valueAtRisk, 0),
+      monthCount:   month30.length,
+      monthVal:     month30.reduce((s, b) => s + b.valueAtRisk, 0),
+      safeCount:    safe.length,
+    };
+  }, [allBatches]);
+
+  /** Batches expiring on the selected day (respects filters). */
+  const dayBatches = useMemo(() => {
+    if (!selectedDay) return [];
+    const key = format(selectedDay, 'yyyy-MM-dd');
+    return filtered.filter(b => b.expiryDate.slice(0, 10) === key);
+  }, [selectedDay, filtered]);
+
+  const tableRows = useMemo(
+    () => [...filtered].sort((a, b) =>
+      sortAsc ? a.daysUntilExpiry - b.daysUntilExpiry : b.daysUntilExpiry - a.daysUntilExpiry
+    ),
+    [filtered, sortAsc]
+  );
 
   const activeFilterCount = [
-    filterDrug !== 'all',
-    filterCategory !== 'all',
-    filterUrgency !== 'all',
+    drugFilter !== 'all',
+    catFilter  !== 'all',
+    urgency    !== 'all',
   ].filter(Boolean).length;
 
-  // ── Batches grouped by day (for calendar) ─────────────────────────────────
-  const batchesByDay = useMemo(() => {
-    const map = new Map<string, FlatBatch[]>();
-    for (const b of filtered) {
-      if (!map.has(b.expiryDate)) map.set(b.expiryDate, []);
-      map.get(b.expiryDate)!.push(b);
-    }
-    return map;
-  }, [filtered]);
+  const months = [windowStart, addMonths(windowStart, 1), addMonths(windowStart, 2)];
 
-  // ── Summary stats ──────────────────────────────────────────────────────────
-  const stats = useMemo(() => {
-    const expired = filtered.filter(b => b.daysUntilExpiry <  0);
-    const in7     = filtered.filter(b => b.daysUntilExpiry >= 0 && b.daysUntilExpiry < 7);
-    const in30    = filtered.filter(b => b.daysUntilExpiry >= 7 && b.daysUntilExpiry < 30);
-    const safe    = filtered.filter(b => b.daysUntilExpiry >= 90);
-    const sum     = (arr: FlatBatch[]) => arr.reduce((s, b) => s + b.valueAtRisk, 0);
-    return { expired, in7, in30, safe, sum };
-  }, [filtered]);
-
-  // ── Selected day batches ───────────────────────────────────────────────────
-  const selectedBatches = useMemo(() => {
-    if (!selectedDate) return [];
-    const key = format(selectedDate, 'yyyy-MM-dd');
-    return batchesByDay.get(key) ?? [];
-  }, [selectedDate, batchesByDay]);
-
-  // ── Table data ─────────────────────────────────────────────────────────────
-  const tableRows = useMemo(() => {
-    return [...filtered].sort((a, b) =>
-      tableSortAsc
-        ? a.daysUntilExpiry - b.daysUntilExpiry
-        : b.daysUntilExpiry - a.daysUntilExpiry,
-    );
-  }, [filtered, tableSortAsc]);
-
-  // ── Loading ────────────────────────────────────────────────────────────────
-  if (loading) return <PageSkeleton />;
-
-  // ── Empty state ────────────────────────────────────────────────────────────
-  if (allBatches.length === 0) {
+  // ── Loading skeleton ────────────────────────────────────────────────────
+  if (loading) {
     return (
-      <div className="p-6 max-w-6xl mx-auto">
-        <h1 className="text-2xl font-bold text-slate-800 mb-2">Expiry Heatmap</h1>
-        <div className="mt-16 text-center">
-          <Calendar size={48} className="mx-auto text-slate-200 mb-4" />
-          <p className="text-slate-500">No batch data available.</p>
-          <p className="text-slate-400 text-sm mt-1">Ensure the database has been seeded from the Dashboard.</p>
+      <div className="p-6 space-y-5 animate-pulse">
+        <div className="h-7 bg-gray-200 rounded w-52" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map(i => <div key={i} className="h-24 bg-gray-200 rounded-xl" />)}
         </div>
+        <div className="h-12 bg-gray-200 rounded-xl" />
+        <div className="h-80 bg-gray-200 rounded-xl" />
       </div>
     );
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-  const months = [viewMonth, addMonths(viewMonth, 1), addMonths(viewMonth, 2)];
+  // ── Empty state ─────────────────────────────────────────────────────────
+  if (!allBatches.length) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center h-96 text-center gap-3">
+        <Package size={52} className="text-gray-200" />
+        <p className="text-lg font-semibold text-gray-500">No batch data available.</p>
+        <p className="text-sm text-gray-400">
+          Ensure the database has been seeded with batch records.
+        </p>
+      </div>
+    );
+  }
 
+  // ── Main render ─────────────────────────────────────────────────────────
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 space-y-5">
 
-      {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div className="mb-5 flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Expiry Heatmap</h1>
-          <p className="text-slate-500 text-sm mt-0.5">
-            Calendar view of batch expiry dates — identify waste risk at a glance
-          </p>
-        </div>
-        {/* Legend */}
-        <div className="flex items-center gap-2 flex-wrap text-[11px]">
-          {[
-            { bg: 'bg-red-400',    label: 'Expired / Today' },
-            { bg: 'bg-orange-400', label: '< 7 days' },
-            { bg: 'bg-yellow-400', label: '< 30 days' },
-            { bg: 'bg-green-400',  label: '< 90 days' },
-          ].map(({ bg, label }) => (
-            <span key={label} className="flex items-center gap-1 text-slate-600">
-              <span className={`w-3 h-3 rounded-sm ${bg}`} />
-              {label}
-            </span>
-          ))}
-        </div>
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2">
+        <Calendar size={22} className="text-blue-600" />
+        <h1 className="text-xl font-bold text-gray-800">Expiry Heatmap</h1>
+        <span className="text-sm text-gray-400 ml-1">· {allBatches.length} batches tracked</span>
       </div>
 
-      {/* ── Summary cards ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-        {[
-          {
-            label:   'Expired',
-            count:   stats.expired.length,
-            value:   stats.sum(stats.expired),
-            bg:      'bg-red-50 border-red-200',
-            iconBg:  'bg-red-100',
-            icon:    <AlertTriangle size={17} className="text-red-500" />,
-            numCls:  'text-red-700',
-          },
-          {
-            label:   'Expiring < 7 Days',
-            count:   stats.in7.length,
-            value:   stats.sum(stats.in7),
-            bg:      'bg-orange-50 border-orange-200',
-            iconBg:  'bg-orange-100',
-            icon:    <Clock size={17} className="text-orange-500" />,
-            numCls:  'text-orange-700',
-          },
-          {
-            label:   'Expiring < 30 Days',
-            count:   stats.in30.length,
-            value:   stats.sum(stats.in30),
-            bg:      'bg-yellow-50 border-yellow-200',
-            iconBg:  'bg-yellow-100',
-            icon:    <Clock size={17} className="text-yellow-600" />,
-            numCls:  'text-yellow-700',
-          },
-          {
-            label:   'Safe (> 90 Days)',
-            count:   stats.safe.length,
-            value:   null,
-            bg:      'bg-green-50 border-green-200',
-            iconBg:  'bg-green-100',
-            icon:    <Package size={17} className="text-green-600" />,
-            numCls:  'text-green-700',
-          },
-        ].map(({ label, count, value, bg, iconBg, icon, numCls }) => (
-          <div key={label} className={`rounded-xl border p-4 shadow-sm ${bg}`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className={`p-2 rounded-lg ${iconBg}`}>{icon}</div>
-            </div>
-            <p className={`text-2xl font-bold ${numCls}`}>{count}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{label}</p>
-            {value !== null && value > 0 && (
-              <p className="text-xs text-slate-400 mt-1 flex items-center gap-0.5">
-                <IndianRupee size={10} />{value.toLocaleString('en-IN')} at risk
-              </p>
-            )}
-          </div>
-        ))}
+      {/* ── Summary cards ───────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard
+          icon={<AlertTriangle size={16} className="text-red-500" />}
+          label="Expired"
+          count={stats.expiredCount}
+          sub={`₹${inr(stats.expiredVal)} at risk`}
+          border="border-red-100"
+          countCls="text-red-600"
+        />
+        <StatCard
+          icon={<Clock size={16} className="text-orange-500" />}
+          label="Expiring in 7 Days"
+          count={stats.weekCount}
+          sub={`₹${inr(stats.weekVal)} at risk`}
+          border="border-orange-100"
+          countCls="text-orange-500"
+        />
+        <StatCard
+          icon={<Clock size={16} className="text-yellow-500" />}
+          label="Expiring in 30 Days"
+          count={stats.monthCount}
+          sub={`₹${inr(stats.monthVal)} at risk`}
+          border="border-yellow-100"
+          countCls="text-yellow-600"
+        />
+        <StatCard
+          icon={<Package size={16} className="text-green-500" />}
+          label="Safe (>90 Days)"
+          count={stats.safeCount}
+          sub="No immediate risk"
+          border="border-green-100"
+          countCls="text-green-600"
+        />
       </div>
 
-      {/* ── Filter bar ────────────────────────────────────────────────────── */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-5 shadow-sm">
-        <div className="flex items-center gap-3 flex-wrap mb-3">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-            <Filter size={13} />
-            Filters
-            {activeFilterCount > 0 && (
-              <span className="bg-blue-600 text-white text-[10px] rounded-full px-1.5 py-0.5 font-bold">
+      {/* ── Filter bar ──────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter size={14} className="text-gray-400" />
+          <span className="text-sm font-medium text-gray-600">Filters</span>
+          {activeFilterCount > 0 && (
+            <>
+              <span className="bg-blue-600 text-white text-xs font-bold rounded-full px-2 py-0.5">
                 {activeFilterCount}
               </span>
-            )}
-          </div>
+              <button
+                onClick={() => { setDrugFilter('all'); setCatFilter('all'); setUrgency('all'); }}
+                className="ml-auto flex items-center gap-1 text-xs text-blue-500 hover:underline"
+              >
+                <X size={11} /> Clear all
+              </button>
+            </>
+          )}
+        </div>
 
+        <div className="flex flex-wrap gap-3 items-center">
           {/* Drug dropdown */}
           <select
-            value={filterDrug}
-            onChange={e => setFilterDrug(e.target.value)}
-            className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700"
+            value={drugFilter}
+            onChange={e => setDrugFilter(e.target.value)}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
           >
             <option value="all">All Drugs</option>
-            {drugs.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            {drugOptions.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
           </select>
 
           {/* Category dropdown */}
           <select
-            value={filterCategory}
-            onChange={e => setFilterCategory(e.target.value)}
-            className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700"
+            value={catFilter}
+            onChange={e => setCatFilter(e.target.value)}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
           >
             <option value="all">All Categories</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            {catOptions.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
           </select>
 
-          {/* Reset */}
-          {activeFilterCount > 0 && (
-            <button
-              onClick={() => { setFilterDrug('all'); setFilterCategory('all'); setFilterUrgency('all'); }}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-red-600 transition-colors"
-            >
-              <X size={12} /> Clear
-            </button>
-          )}
-        </div>
-
-        {/* Urgency pills */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {(
-            [
-              { key: 'all',     label: 'All' },
-              { key: 'expired', label: 'Expired' },
-              { key: '7',       label: '< 7 days' },
-              { key: '30',      label: '< 30 days' },
-              { key: '90',      label: '< 90 days' },
-            ] as { key: UrgencyFilter; label: string }[]
-          ).map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setFilterUrgency(key)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                filterUrgency === key
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-          <span className="text-xs text-slate-400 ml-auto">
-            {filtered.length} batch{filtered.length !== 1 ? 'es' : ''} shown
-          </span>
+          {/* Urgency pills */}
+          <div className="flex gap-2 flex-wrap">
+            {URGENCY_OPTS.map(({ val, label, active, inactive }) => (
+              <button
+                key={val}
+                onClick={() => setUrgency(val)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  urgency === val ? active : inactive
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* ── Calendar + Detail panel ────────────────────────────────────────── */}
-      <div className="mb-5">
-        {/* Month navigation */}
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={() => setViewMonth(m => subMonths(m, 1))}
-            className="flex items-center gap-1 px-3 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            <ChevronLeft size={15} /> Prev
-          </button>
-          <span className="text-sm font-medium text-slate-600">
-            {format(viewMonth, 'MMM yyyy')} — {format(addMonths(viewMonth, 2), 'MMM yyyy')}
-          </span>
-          <button
-            onClick={() => setViewMonth(m => addMonths(m, 1))}
-            className="flex items-center gap-1 px-3 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            Next <ChevronRight size={15} />
-          </button>
+      {/* ── Calendar + Day detail panel ─────────────────────────────────── */}
+      <div className="flex flex-col lg:flex-row gap-4">
+
+        {/* Calendar */}
+        <div className="flex-1 bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between mb-5">
+            <button
+              onClick={() => setWindowStart(prev => subMonths(prev, 1))}
+              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <span className="text-sm font-semibold text-gray-600">
+              {format(windowStart, 'MMM yyyy')} — {format(addMonths(windowStart, 2), 'MMM yyyy')}
+            </span>
+            <button
+              onClick={() => setWindowStart(prev => addMonths(prev, 1))}
+              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+
+          {/* Three month grids */}
+          <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+            {months.map((m, i) => (
+              <MonthGrid
+                key={i}
+                monthStart={m}
+                byDay={byDay}
+                selectedDay={selectedDay}
+                onSelect={setSelectedDay}
+              />
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 mt-5 pt-4 border-t border-gray-100">
+            {LEGEND.map(([bg, label]) => (
+              <div key={label} className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className={`w-3 h-3 rounded ${bg}`} />
+                <span>{label}</span>
+              </div>
+            ))}
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <div className="w-3 h-3 rounded border-2 border-blue-300" />
+              <span>Today</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <div className="w-3 h-3 rounded border-2 border-blue-500" />
+              <span>Selected</span>
+            </div>
+          </div>
         </div>
 
-        {/* 3-month grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {months.map(m => (
-            <MonthGrid
-              key={format(m, 'yyyy-MM')}
-              month={m}
-              batchesByDay={batchesByDay}
-              selectedDate={selectedDate}
-              onSelectDate={d => setSelectedDate(prev => prev && isSameDay(prev, d) ? null : d)}
-            />
-          ))}
-        </div>
-
-        {/* ── Day detail panel ────────────────────────────────────────────── */}
-        {selectedDate && (
-          <div className="mt-4 bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
-            {/* Panel header */}
-            <div className="flex items-center justify-between px-5 py-3 bg-blue-50 border-b border-blue-200">
-              <div className="flex items-center gap-2">
-                <Calendar size={15} className="text-blue-600" />
-                <span className="text-sm font-semibold text-blue-800">
-                  {format(selectedDate, 'EEEE, dd MMMM yyyy')}
-                </span>
-                <span className="text-xs text-blue-600">
-                  — {selectedBatches.length} batch{selectedBatches.length !== 1 ? 'es' : ''} expiring
-                </span>
+        {/* Day detail panel */}
+        {selectedDay && (
+          <div className="lg:w-80 xl:w-96 bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-col">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="font-bold text-gray-800 text-base">
+                  {format(selectedDay, 'dd MMMM yyyy')}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {dayBatches.length === 0
+                    ? 'No batches expiring (after filters)'
+                    : `${dayBatches.length} batch${dayBatches.length > 1 ? 'es' : ''} expiring`}
+                </p>
               </div>
               <button
-                onClick={() => setSelectedDate(null)}
-                className="text-blue-400 hover:text-blue-600 transition-colors"
+                onClick={() => setSelectedDay(null)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0 mt-0.5 transition"
               >
                 <X size={16} />
               </button>
             </div>
 
-            {selectedBatches.length === 0 ? (
-              <div className="px-5 py-8 text-center text-slate-400 text-sm">
-                No batches expire on this date.
+            {dayBatches.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center py-10">
+                <p className="text-sm text-gray-300 text-center">
+                  Nothing to show for this date.
+                </p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
-                {selectedBatches.map(b => (
-                  <div key={b.batchNumber + b.drugId} className="px-5 py-4 flex items-start justify-between gap-4 flex-wrap">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{b.drugName}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">Batch: {b.batchNumber}</p>
-                      <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500 flex-wrap">
-                        <span>Qty: <strong className="text-slate-700">{b.quantity}</strong></span>
-                        <span>Cost/unit: <strong className="text-slate-700">₹{b.costPerUnit}</strong></span>
-                        <span className={`font-semibold ${urgencyTextColor(b.daysUntilExpiry)}`}>
-                          {b.daysUntilExpiry < 0
-                            ? `Expired ${Math.abs(b.daysUntilExpiry)}d ago`
-                            : b.daysUntilExpiry === 0
-                            ? 'Expires today!'
-                            : `${b.daysUntilExpiry} days left`}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="flex items-center gap-1 justify-end font-semibold text-slate-700 text-sm">
-                        <IndianRupee size={13} />
-                        {b.valueAtRisk.toLocaleString('en-IN')}
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">value at risk</p>
-                    </div>
-                  </div>
-                ))}
+              <>
+                <div className="space-y-3 flex-1 overflow-y-auto max-h-[420px] pr-1">
+                  {dayBatches.map(b => {
+                    const si = statusInfo(b.daysUntilExpiry);
+                    return (
+                      <div
+                        key={b.batchId}
+                        className="border border-gray-100 rounded-xl p-3.5 hover:border-gray-200 transition"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <span className="text-sm font-semibold text-gray-800 leading-snug">
+                            {b.drugName}
+                          </span>
+                          <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${si.cls}`}>
+                            {si.label}
+                          </span>
+                        </div>
 
-                {/* Total */}
-                <div className="px-5 py-3 bg-slate-50 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                    Total Value at Risk
-                  </span>
-                  <div className="flex items-center gap-1 text-base font-bold text-red-600">
-                    <IndianRupee size={15} />
-                    {selectedBatches.reduce((s, b) => s + b.valueAtRisk, 0).toLocaleString('en-IN')}
+                        <p className="text-xs text-gray-400 font-mono mb-2.5">
+                          #{b.batchNumber}
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="bg-gray-50 rounded-lg p-2">
+                            <span className="text-gray-400 block mb-0.5">Quantity</span>
+                            <span className="font-semibold text-gray-700">{b.quantity} units</span>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-2">
+                            <span className="text-gray-400 block mb-0.5">Cost / Unit</span>
+                            <span className="font-semibold text-gray-700">₹{b.costPerUnit}</span>
+                          </div>
+                        </div>
+
+                        <div className="mt-2.5 flex items-center justify-between">
+                          <span className="text-xs text-gray-500">Value at risk</span>
+                          <span className="text-sm font-bold text-red-600">
+                            ₹{inr(b.valueAtRisk)}
+                          </span>
+                        </div>
+
+                        {b.daysUntilExpiry > 0 && (
+                          <p className="mt-1 text-xs text-gray-400">
+                            {b.daysUntilExpiry} day{b.daysUntilExpiry !== 1 ? 's' : ''} remaining
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Total value */}
+                <div className="border-t border-gray-100 pt-3 mt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-700">
+                      Total Value at Risk
+                    </span>
+                    <span className="text-base font-bold text-red-600">
+                      ₹{inr(dayBatches.reduce((s, b) => s + b.valueAtRisk, 0))}
+                    </span>
                   </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
         )}
       </div>
 
-      {/* ── Expiry Timeline Table ─────────────────────────────────────────── */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      {/* ── Expiry Timeline Table (collapsible) ─────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <button
-          onClick={() => setShowTable(v => !v)}
-          className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition-colors"
+          onClick={() => setTableOpen(o => !o)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition"
         >
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <AlertTriangle size={15} className="text-slate-400" />
-            Expiry Timeline — All Batches
-            <span className="text-xs font-normal text-slate-400">({tableRows.length})</span>
+          <div className="flex items-center gap-2">
+            <Calendar size={16} className="text-gray-400" />
+            <span className="font-semibold text-gray-700">Expiry Timeline</span>
+            <span className="text-xs text-gray-400 font-normal">
+              · {filtered.length} batch{filtered.length !== 1 ? 'es' : ''}
+            </span>
           </div>
-          {showTable ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+          {tableOpen
+            ? <ChevronUp size={18} className="text-gray-400" />
+            : <ChevronDown size={18} className="text-gray-400" />
+          }
         </button>
 
-        {showTable && (
-          <div className="border-t border-slate-100 overflow-x-auto">
+        {tableOpen && (
+          <div className="overflow-x-auto border-t border-gray-100">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100 text-left">
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Drug</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Batch #</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">Qty</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Expiry Date</th>
-                  <th
-                    className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right cursor-pointer select-none hover:text-blue-600 transition-colors"
-                    onClick={() => setTableSortAsc(v => !v)}
-                  >
-                    Days Left {tableSortAsc ? '↑' : '↓'}
+              <thead className="bg-gray-50">
+                <tr>
+                  {['Drug Name', 'Batch #', 'Qty', 'Expiry Date'].map(h => (
+                    <th
+                      key={h}
+                      className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                    <button
+                      className="flex items-center gap-1 hover:text-gray-700 transition"
+                      onClick={() => setSortAsc(a => !a)}
+                    >
+                      Days Left
+                      {sortAsc
+                        ? <ChevronUp size={11} />
+                        : <ChevronDown size={11} />
+                      }
+                    </button>
                   </th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">Value at Risk</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                    Value at Risk (₹)
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Status
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
-                {tableRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-slate-400 text-sm">
-                      No batches match the current filters.
-                    </td>
-                  </tr>
-                ) : tableRows.map(b => (
-                  <tr
-                    key={b.drugId + b.batchNumber}
-                    className="hover:bg-slate-50 transition-colors cursor-pointer"
-                    onClick={() => {
-                      try {
-                        const d = parseISO(b.expiryDate);
-                        setSelectedDate(d);
-                        setViewMonth(startOfMonth(d));
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      } catch { /* ignore */ }
-                    }}
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-800 truncate max-w-[160px]">{b.drugName}</p>
-                      <p className="text-[11px] text-slate-400">{b.drugCategory}</p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 font-mono text-xs">{b.batchNumber}</td>
-                    <td className="px-4 py-3 text-right text-slate-700 font-medium">{b.quantity}</td>
-                    <td className="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">
-                      {format(parseISO(b.expiryDate), 'dd MMM yyyy')}
-                    </td>
-                    <td className={`px-4 py-3 text-right font-semibold ${urgencyTextColor(b.daysUntilExpiry)}`}>
-                      {b.daysUntilExpiry < 0
-                        ? `−${Math.abs(b.daysUntilExpiry)}`
-                        : b.daysUntilExpiry === 0
-                        ? 'Today'
-                        : b.daysUntilExpiry}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="flex items-center justify-end gap-0.5 text-slate-700 font-medium">
-                        <IndianRupee size={11} />{b.valueAtRisk.toLocaleString('en-IN')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusBadge(b.daysUntilExpiry)}`}>
-                        {statusLabel(b.daysUntilExpiry)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
 
-              {/* Table footer — total value */}
-              {tableRows.length > 0 && (
-                <tfoot>
-                  <tr className="border-t border-slate-200 bg-slate-50">
-                    <td colSpan={5} className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Total Value at Risk
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="flex items-center justify-end gap-0.5 font-bold text-red-600">
-                        <IndianRupee size={13} />
-                        {tableRows.reduce((s, b) => s + b.valueAtRisk, 0).toLocaleString('en-IN')}
-                      </span>
-                    </td>
-                    <td />
-                  </tr>
-                </tfoot>
-              )}
+              <tbody className="divide-y divide-gray-50">
+                {tableRows.map(b => {
+                  const si = statusInfo(b.daysUntilExpiry);
+                  return (
+                    <tr
+                      key={b.batchId}
+                      className="hover:bg-blue-50 cursor-pointer transition group"
+                      onClick={() => {
+                        setSelectedDay(parseISO(b.expiryDate));
+                        setTableOpen(false);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                    >
+                      <td className="px-4 py-3 font-medium text-gray-800 group-hover:text-blue-600 transition">
+                        {b.drugName}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500">
+                        {b.batchNumber}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{b.quantity}</td>
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                        {format(parseISO(b.expiryDate), 'dd MMM yyyy')}
+                      </td>
+                      <td className="px-4 py-3 font-medium whitespace-nowrap">
+                        {b.daysUntilExpiry <= 0
+                          ? <span className="text-red-500">Expired</span>
+                          : <span className="text-gray-700">{b.daysUntilExpiry}d</span>
+                        }
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-gray-700">
+                        ₹{inr(b.valueAtRisk)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${si.cls}`}>
+                          {si.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             </table>
           </div>
         )}

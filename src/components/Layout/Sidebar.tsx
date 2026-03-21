@@ -12,9 +12,12 @@ import {
   FileText,
   LogOut,
   Menu,
+  Moon,
+  Sun,
   X,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { useTheme } from '../../contexts/ThemeContext';
 import type { UserRole } from '../../types';
 
 interface NavItem {
@@ -63,6 +66,7 @@ const roleBadgeColors: Record<UserRole, string> = {
 
 export default function Sidebar() {
   const { profile, signOut } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
@@ -78,14 +82,23 @@ export default function Sidebar() {
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-6 border-b border-slate-700">
-        <div className="bg-emerald-500 rounded-lg p-1.5">
-          <Pill size={20} className="text-white" />
+      <div className="flex items-center justify-between px-5 py-6 border-b border-slate-700 dark:border-slate-600">
+        <div className="flex items-center gap-3">
+          <div className="bg-emerald-500 rounded-lg p-1.5">
+            <Pill size={20} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-white font-bold text-sm leading-tight">PharmaGuard</h1>
+            <p className="text-slate-400 text-xs">Gujarat</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-white font-bold text-sm leading-tight">PharmaGuard</h1>
-          <p className="text-slate-400 text-xs">Gujarat</p>
-        </div>
+        <button
+          onClick={toggleTheme}
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors"
+        >
+          {isDark ? <Sun size={15} /> : <Moon size={15} />}
+        </button>
       </div>
 
       {/* Nav */}
@@ -142,7 +155,7 @@ export default function Sidebar() {
     <>
       {/* Mobile hamburger */}
       <button
-        className="fixed top-4 left-4 z-50 md:hidden bg-slate-800 text-white p-2 rounded-lg"
+        className="fixed top-4 left-4 z-50 md:hidden bg-slate-800 dark:bg-slate-900 text-white p-2 rounded-lg"
         onClick={() => setOpen(!open)}
       >
         {open ? <X size={20} /> : <Menu size={20} />}
@@ -158,7 +171,7 @@ export default function Sidebar() {
 
       {/* Mobile drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-56 bg-slate-800 transform transition-transform md:hidden ${
+        className={`fixed inset-y-0 left-0 z-40 w-56 bg-slate-800 dark:bg-slate-900 transform transition-transform md:hidden ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -166,7 +179,7 @@ export default function Sidebar() {
       </aside>
 
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-56 bg-slate-800 min-h-screen flex-shrink-0">
+      <aside className="hidden md:flex flex-col w-56 bg-slate-800 dark:bg-slate-900 min-h-screen flex-shrink-0">
         {sidebarContent}
       </aside>
     </>
