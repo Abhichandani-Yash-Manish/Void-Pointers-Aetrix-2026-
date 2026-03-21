@@ -75,17 +75,15 @@ def run_prediction(drug_id: str, drug_name: str, current_stock: float,
         )
 
     # ── 2. Build feature matrix ─────────────────────────────────────────────
-    # X = days since the first data point (numeric time index)
-    # y = weekly quantity dispensed
-    origin = parsed[0][0]
-    X_raw  = np.array([(dt - origin).days for dt, _ in parsed], dtype=float)
-    y      = np.array([qty for _, qty in parsed], dtype=float)
+    # X = sequential week index (0, 1, 2, …) — slope is units/week change per week
+    # y = weekly quantity dispensed (all entries, including zeros, are valid)
+    y = np.array([qty for _, qty in parsed], dtype=float)
 
     # Guard: if every quantity is zero the model is trivially useless
     if y.sum() == 0:
         raise ValueError("All dispensed quantities are zero — cannot build a meaningful forecast.")
 
-    X = X_raw.reshape(-1, 1)
+    X = np.arange(len(parsed)).reshape(-1, 1)  # 0, 1, 2, 3, ...
 
     # ── 3. Fit LinearRegression ────────────────────────────────────────────────
     model = LinearRegression()
@@ -100,43 +98,53 @@ def run_prediction(drug_id: str, drug_name: str, current_stock: float,
     # R² — how well the line fits historical data (1.0 = perfect)
     r2 = float(r2_score(y, y_pred_train))
 
-    # MAPE — mean absolute percentage error (lower = better)
-    # Use max(actual, 1) to avoid division-by-zero on zero-quantity weeks
-    abs_pct_errors = np.abs(y - y_pred_train) / np.maximum(y, 1)
-    mape = float(np.mean(abs_pct_errors) * 100)
+    # MAE — mean absolute error; interpretable, no division-by-zero issues
+    mae = float(np.mean(np.abs(y - y_pred_train)))
 
-    # Trend classification
-    if slope > TREND_SLOPE_THRESHOLD:
+    # SMAPE — symmetric, handles zero-demand weeks better than MAPE
+    denominator  = np.abs(y) + np.abs(y_pred_train)
+    smape_values = np.where(denominator == 0, 0, 2 * np.abs(y - y_pred_train) / denominator)
+    smape        = float(np.mean(smape_values) * 100)
+
+    # MAPE — kept for backward compatibility; zero-demand weeks contribute 0 error
+    mape_values = np.where(y == 0, 0, np.abs((y - y_pred_train) / np.where(y == 0, 1, y)))
+    mape        = float(np.mean(mape_values) * 100)
+
+    # Trend classification — slope is now units/week change per week (threshold: ±2)
+    avg_demand     = float(np.mean(y))
+    relative_slope = (slope / avg_demand * 100) if avg_demand > 0 else 0.0  # % per week
+
+    if slope > 2:
         trend = "increasing"
-    elif slope < -TREND_SLOPE_THRESHOLD:
+    elif slope < -2:
         trend = "decreasing"
     else:
         trend = "stable"
 
     # ── 5. Future predictions (4 weekly points) ────────────────────────────────
-    # Start from the day after the last historical entry
-    last_date    = parsed[-1][0]
-    last_day_num = float((last_date - origin).days)
+    # Use week indices beyond training range; dates advance by 7 days per week
+    last_date     = parsed[-1][0]
+    last_week_idx = len(parsed) - 1
+    future_X      = np.array([[last_week_idx + i] for i in range(1, PREDICTION_WEEKS + 1)])
+    raw_predictions = model.predict(future_X)
 
     predictions = []
-    for week in range(1, PREDICTION_WEEKS + 1):
-        future_day  = last_day_num + (week * 7)
-        future_date = last_date + timedelta(days=week * 7)
-        pred_qty    = float(model.predict(np.array([[future_day]]))[0])
-        # Demand cannot be negative
-        pred_qty = max(pred_qty, 0.0)
+    for i, pred in enumerate(raw_predictions, start=1):
+        future_date = last_date + timedelta(weeks=i)
+        pred_qty    = max(float(pred), 0.0)  # demand cannot be negative
         predictions.append({
             "date":               future_date.strftime("%Y-%m-%d"),
             "predicted_quantity": round(pred_qty, 2),
         })
 
     # ── 6. Reorder suggestion ──────────────────────────────────────────────────
-    # Average weekly demand from history (use only positive values)
-    avg_weekly_demand = float(np.mean(y[y > 0])) if (y > 0).any() else 0.0
-    avg_daily_demand  = avg_weekly_demand / 7.0
+    # Use ML-predicted demand (not historical average) for stockout calculation
+    predicted_4week_demand = float(np.sum(np.maximum(raw_predictions, 0)))
+    predicted_weekly_avg   = predicted_4week_demand / 4.0
 
-    if avg_daily_demand > 0:
-        days_until_stockout = int(round(current_stock / avg_daily_demand))
+    if predicted_weekly_avg > 0:
+        predicted_daily_demand = predicted_weekly_avg / 7.0
+        days_until_stockout    = round(current_stock / predicted_daily_demand, 1)
     else:
         days_until_stockout = 9999  # effectively infinite
 
@@ -145,22 +153,20 @@ def run_prediction(drug_id: str, drug_name: str, current_stock: float,
         or current_stock <= reorder_level
     )
 
-    # Predicted 30-day demand = sum of the 4 weekly predictions
-    predicted_30day = sum(p["predicted_quantity"] for p in predictions)
-    suggested_qty   = int(round(predicted_30day * BUFFER_FACTOR))
+    suggested_qty = max(round(predicted_4week_demand * BUFFER_FACTOR), 0)
 
     if days_until_stockout >= 9999:
-        reason = "No demand detected — stock sufficient indefinitely."
-    elif should_reorder:
-        reason = (
-            f"Stock will deplete in ~{days_until_stockout} day"
-            f"{'s' if days_until_stockout != 1 else ''} based on current trend."
-        )
+        reason = "No demand predicted — stock sufficient indefinitely."
     else:
         reason = (
-            f"Stock sufficient for ~{days_until_stockout} days. "
-            "Monitor if trend is increasing."
+            f"Based on ML predictions, stock will deplete in ~{days_until_stockout} days. "
+            f"Predicted 4-week demand: {round(predicted_4week_demand)} units."
         )
+        if current_stock <= reorder_level:
+            reason += (
+                f" Current stock ({int(current_stock)}) is at or below "
+                f"reorder level ({int(reorder_level)})."
+            )
 
     # ── 7. Build response ──────────────────────────────────────────────────────
     return {
@@ -168,15 +174,19 @@ def run_prediction(drug_id: str, drug_name: str, current_stock: float,
         "drugName": drug_name,
         "predictions": predictions,
         "metrics": {
-            "r2_score":  round(r2,    4),
-            "mape":      round(mape,  2),
-            "trend":     trend,
-            "slope":     round(slope, 4),
-            "intercept": round(intercept, 4),
+            "r2_score":           round(r2,             3),
+            "mae":                round(mae,            2),
+            "smape":              round(smape,          2),
+            "mape":               round(mape,           2),
+            "slope":              round(slope,          4),
+            "intercept":          round(intercept,      4),
+            "trend":              trend,
+            "relative_slope_pct": round(relative_slope, 2),
+            "avg_weekly_demand":  round(avg_demand,     2),
         },
         "reorder_suggestion": {
             "should_reorder":      should_reorder,
-            "suggested_quantity":  suggested_qty,
+            "suggested_quantity":  int(suggested_qty),
             "days_until_stockout": days_until_stockout,
             "reason":              reason,
         },
