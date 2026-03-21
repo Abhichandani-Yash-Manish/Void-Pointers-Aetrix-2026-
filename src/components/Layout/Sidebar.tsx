@@ -62,12 +62,12 @@ const roleBadgeColors: Record<UserRole, string> = {
 };
 
 export default function Sidebar() {
-  const { profile, logout } = useAuth();
+  const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
   const handleLogout = async () => {
-    await logout();
+    await signOut();
     navigate('/login');
   };
 
