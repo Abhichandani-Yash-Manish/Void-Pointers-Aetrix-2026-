@@ -196,7 +196,12 @@ def run_prediction(drug_id: str, drug_name: str, current_stock: float,
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
-@app.get("/api/health")
+@app.route("/")
+def index():
+    return jsonify({"service": "pharmaguard-ml", "status": "running"})
+
+
+@app.route("/api/health", methods=["GET"])
 def health():
     """Quick liveness check used by the frontend to confirm the ML server is up."""
     return jsonify({
@@ -206,7 +211,7 @@ def health():
     })
 
 
-@app.post("/api/predict")
+@app.route("/api/predict", methods=["POST"])
 def predict():
     """
     Single-drug demand forecast.
@@ -249,7 +254,7 @@ def predict():
         return jsonify({"drugId": drug_id, "error": f"Internal error: {str(e)}"}), 500
 
 
-@app.post("/api/predict-all")
+@app.route("/api/predict-all", methods=["POST"])
 def predict_all():
     """
     Batch forecast for multiple drugs in one request.
