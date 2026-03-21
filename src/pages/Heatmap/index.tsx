@@ -118,13 +118,13 @@ interface StatCardProps {
 
 function StatCard({ icon, label, count, sub, border, countCls }: StatCardProps) {
   return (
-    <div className={`bg-white rounded-xl border ${border} shadow-sm p-4`}>
+    <div className={`bg-white dark:bg-slate-800 rounded-xl border ${border} shadow-sm p-4`}>
       <div className="flex items-center gap-2 mb-1">
         {icon}
-        <span className="text-xs font-medium text-gray-500">{label}</span>
+        <span className="text-xs font-medium text-gray-500 dark:text-slate-400">{label}</span>
       </div>
       <p className={`text-2xl font-bold ${countCls}`}>{count}</p>
-      <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+      <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{sub}</p>
     </div>
   );
 }
@@ -145,14 +145,14 @@ function MonthGrid({ monthStart, byDay, selectedDay, onSelect }: MonthGridProps)
   return (
     <div className="flex-1 min-w-[260px]">
       {/* Month title */}
-      <h3 className="text-center text-sm font-semibold text-gray-600 mb-2">
+      <h3 className="text-center text-sm font-semibold text-gray-600 dark:text-slate-300 mb-2">
         {format(monthStart, 'MMMM yyyy')}
       </h3>
 
       {/* Day-of-week headers */}
       <div className="grid grid-cols-7 gap-0.5 mb-1">
         {DAY_LABELS.map(l => (
-          <div key={l} className="text-center text-[10px] font-medium text-gray-400 py-1">
+          <div key={l} className="text-center text-[10px] font-medium text-gray-400 dark:text-slate-500 py-1">
             {l}
           </div>
         ))}
@@ -178,8 +178,8 @@ function MonthGrid({ monthStart, byDay, selectedDay, onSelect }: MonthGridProps)
                 className={[
                   'relative w-full aspect-square min-h-[34px] rounded-md',
                   'flex items-center justify-center text-[11px] font-medium transition-all',
-                  bg || 'bg-gray-50 hover:bg-gray-100',
-                  batches.length ? 'text-gray-900' : 'text-gray-400',
+                  bg || 'bg-gray-50 hover:bg-gray-100 dark:bg-slate-700 dark:hover:bg-slate-600',
+                  batches.length ? 'text-gray-900 dark:text-slate-100' : 'text-gray-400 dark:text-slate-500',
                   selected ? 'ring-2 ring-blue-500 ring-offset-1 scale-105 shadow-sm' : '',
                   todayDay && !selected ? 'ring-2 ring-blue-300' : '',
                 ].filter(Boolean).join(' ')}
@@ -344,12 +344,12 @@ export default function HeatmapPage() {
   if (loading) {
     return (
       <div className="p-6 space-y-5 animate-pulse">
-        <div className="h-7 bg-gray-200 rounded w-52" />
+        <div className="h-7 bg-gray-200 dark:bg-slate-700 rounded w-52" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[0, 1, 2, 3].map(i => <div key={i} className="h-24 bg-gray-200 rounded-xl" />)}
+          {[0, 1, 2, 3].map(i => <div key={i} className="h-24 bg-gray-200 dark:bg-slate-700 rounded-xl" />)}
         </div>
-        <div className="h-12 bg-gray-200 rounded-xl" />
-        <div className="h-80 bg-gray-200 rounded-xl" />
+        <div className="h-12 bg-gray-200 dark:bg-slate-700 rounded-xl" />
+        <div className="h-80 bg-gray-200 dark:bg-slate-700 rounded-xl" />
       </div>
     );
   }
@@ -358,9 +358,9 @@ export default function HeatmapPage() {
   if (!allBatches.length) {
     return (
       <div className="p-6 flex flex-col items-center justify-center h-96 text-center gap-3">
-        <Package size={52} className="text-gray-200" />
-        <p className="text-lg font-semibold text-gray-500">No batch data available.</p>
-        <p className="text-sm text-gray-400">
+        <Package size={52} className="text-gray-200 dark:text-slate-700" />
+        <p className="text-lg font-semibold text-gray-500 dark:text-slate-400">No batch data available.</p>
+        <p className="text-sm text-gray-400 dark:text-slate-500">
           Ensure the database has been seeded with batch records.
         </p>
       </div>
@@ -374,8 +374,8 @@ export default function HeatmapPage() {
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2">
         <Calendar size={22} className="text-blue-600" />
-        <h1 className="text-xl font-bold text-gray-800">Expiry Heatmap</h1>
-        <span className="text-sm text-gray-400 ml-1">· {allBatches.length} batches tracked</span>
+        <h1 className="text-xl font-bold text-gray-800 dark:text-slate-100">Expiry Heatmap</h1>
+        <span className="text-sm text-gray-400 dark:text-slate-500 ml-1">· {allBatches.length} batches tracked</span>
       </div>
 
       {/* ── Summary cards ───────────────────────────────────────────────── */}
@@ -415,10 +415,10 @@ export default function HeatmapPage() {
       </div>
 
       {/* ── Filter bar ──────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4">
         <div className="flex items-center gap-2 mb-3">
-          <Filter size={14} className="text-gray-400" />
-          <span className="text-sm font-medium text-gray-600">Filters</span>
+          <Filter size={14} className="text-gray-400 dark:text-slate-500" />
+          <span className="text-sm font-medium text-gray-600 dark:text-slate-300">Filters</span>
           {activeFilterCount > 0 && (
             <>
               <span className="bg-blue-600 text-white text-xs font-bold rounded-full px-2 py-0.5">
@@ -439,7 +439,7 @@ export default function HeatmapPage() {
           <select
             value={drugFilter}
             onChange={e => setDrugFilter(e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
           >
             <option value="all">All Drugs</option>
             {drugOptions.map(([id, name]) => (
@@ -451,7 +451,7 @@ export default function HeatmapPage() {
           <select
             value={catFilter}
             onChange={e => setCatFilter(e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
           >
             <option value="all">All Categories</option>
             {catOptions.map(c => (
@@ -480,21 +480,21 @@ export default function HeatmapPage() {
       <div className="flex flex-col lg:flex-row gap-4">
 
         {/* Calendar */}
-        <div className="flex-1 bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <div className="flex-1 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5">
           {/* Month navigation */}
           <div className="flex items-center justify-between mb-5">
             <button
               onClick={() => setWindowStart(prev => subMonths(prev, 1))}
-              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 transition"
             >
               <ChevronLeft size={18} />
             </button>
-            <span className="text-sm font-semibold text-gray-600">
+            <span className="text-sm font-semibold text-gray-600 dark:text-slate-300">
               {format(windowStart, 'MMM yyyy')} — {format(addMonths(windowStart, 2), 'MMM yyyy')}
             </span>
             <button
               onClick={() => setWindowStart(prev => addMonths(prev, 1))}
-              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 transition"
             >
               <ChevronRight size={18} />
             </button>
@@ -516,16 +516,16 @@ export default function HeatmapPage() {
           {/* Legend */}
           <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 mt-5 pt-4 border-t border-gray-100">
             {LEGEND.map(([bg, label]) => (
-              <div key={label} className="flex items-center gap-1.5 text-xs text-gray-500">
+              <div key={label} className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
                 <div className={`w-3 h-3 rounded ${bg}`} />
                 <span>{label}</span>
               </div>
             ))}
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
               <div className="w-3 h-3 rounded border-2 border-blue-300" />
               <span>Today</span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
               <div className="w-3 h-3 rounded border-2 border-blue-500" />
               <span>Selected</span>
             </div>
@@ -534,13 +534,13 @@ export default function HeatmapPage() {
 
         {/* Day detail panel */}
         {selectedDay && (
-          <div className="lg:w-80 xl:w-96 bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-col">
+          <div className="lg:w-80 xl:w-96 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="font-bold text-gray-800 text-base">
+                <h3 className="font-bold text-gray-800 dark:text-slate-100 text-base">
                   {format(selectedDay, 'dd MMMM yyyy')}
                 </h3>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">
                   {dayBatches.length === 0
                     ? 'No batches expiring (after filters)'
                     : `${dayBatches.length} batch${dayBatches.length > 1 ? 'es' : ''} expiring`}
@@ -548,7 +548,7 @@ export default function HeatmapPage() {
               </div>
               <button
                 onClick={() => setSelectedDay(null)}
-                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0 mt-0.5 transition"
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-slate-500 shrink-0 mt-0.5 transition"
               >
                 <X size={16} />
               </button>
@@ -556,7 +556,7 @@ export default function HeatmapPage() {
 
             {dayBatches.length === 0 ? (
               <div className="flex-1 flex items-center justify-center py-10">
-                <p className="text-sm text-gray-300 text-center">
+                <p className="text-sm text-gray-300 dark:text-slate-600 text-center">
                   Nothing to show for this date.
                 </p>
               </div>
@@ -568,10 +568,10 @@ export default function HeatmapPage() {
                     return (
                       <div
                         key={b.batchId}
-                        className="border border-gray-100 rounded-xl p-3.5 hover:border-gray-200 transition"
+                        className="border border-gray-100 dark:border-slate-700 rounded-xl p-3.5 hover:border-gray-200 dark:hover:border-slate-600 transition"
                       >
                         <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <span className="text-sm font-semibold text-gray-800 leading-snug">
+                          <span className="text-sm font-semibold text-gray-800 dark:text-slate-100 leading-snug">
                             {b.drugName}
                           </span>
                           <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${si.cls}`}>
@@ -579,30 +579,30 @@ export default function HeatmapPage() {
                           </span>
                         </div>
 
-                        <p className="text-xs text-gray-400 font-mono mb-2.5">
+                        <p className="text-xs text-gray-400 dark:text-slate-500 font-mono mb-2.5">
                           #{b.batchNumber}
                         </p>
 
                         <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="bg-gray-50 rounded-lg p-2">
-                            <span className="text-gray-400 block mb-0.5">Quantity</span>
-                            <span className="font-semibold text-gray-700">{b.quantity} units</span>
+                          <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-2">
+                            <span className="text-gray-400 dark:text-slate-400 block mb-0.5">Quantity</span>
+                            <span className="font-semibold text-gray-700 dark:text-slate-200">{b.quantity} units</span>
                           </div>
-                          <div className="bg-gray-50 rounded-lg p-2">
-                            <span className="text-gray-400 block mb-0.5">Cost / Unit</span>
-                            <span className="font-semibold text-gray-700">₹{b.costPerUnit}</span>
+                          <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-2">
+                            <span className="text-gray-400 dark:text-slate-400 block mb-0.5">Cost / Unit</span>
+                            <span className="font-semibold text-gray-700 dark:text-slate-200">₹{b.costPerUnit}</span>
                           </div>
                         </div>
 
                         <div className="mt-2.5 flex items-center justify-between">
-                          <span className="text-xs text-gray-500">Value at risk</span>
+                          <span className="text-xs text-gray-500 dark:text-slate-400">Value at risk</span>
                           <span className="text-sm font-bold text-red-600">
                             ₹{inr(b.valueAtRisk)}
                           </span>
                         </div>
 
                         {b.daysUntilExpiry > 0 && (
-                          <p className="mt-1 text-xs text-gray-400">
+                          <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">
                             {b.daysUntilExpiry} day{b.daysUntilExpiry !== 1 ? 's' : ''} remaining
                           </p>
                         )}
@@ -612,9 +612,9 @@ export default function HeatmapPage() {
                 </div>
 
                 {/* Total value */}
-                <div className="border-t border-gray-100 pt-3 mt-3">
+                <div className="border-t border-gray-100 dark:border-slate-700 pt-3 mt-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-gray-700">
+                    <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">
                       Total Value at Risk
                     </span>
                     <span className="text-base font-bold text-red-600">
@@ -629,40 +629,40 @@ export default function HeatmapPage() {
       </div>
 
       {/* ── Expiry Timeline Table (collapsible) ─────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
         <button
           onClick={() => setTableOpen(o => !o)}
-          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition"
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition"
         >
           <div className="flex items-center gap-2">
-            <Calendar size={16} className="text-gray-400" />
-            <span className="font-semibold text-gray-700">Expiry Timeline</span>
-            <span className="text-xs text-gray-400 font-normal">
+            <Calendar size={16} className="text-gray-400 dark:text-slate-500" />
+            <span className="font-semibold text-gray-700 dark:text-slate-200">Expiry Timeline</span>
+            <span className="text-xs text-gray-400 dark:text-slate-500 font-normal">
               · {filtered.length} batch{filtered.length !== 1 ? 'es' : ''}
             </span>
           </div>
           {tableOpen
-            ? <ChevronUp size={18} className="text-gray-400" />
-            : <ChevronDown size={18} className="text-gray-400" />
+            ? <ChevronUp size={18} className="text-gray-400 dark:text-slate-500" />
+            : <ChevronDown size={18} className="text-gray-400 dark:text-slate-500" />
           }
         </button>
 
         {tableOpen && (
-          <div className="overflow-x-auto border-t border-gray-100">
+          <div className="overflow-x-auto border-t border-gray-100 dark:border-slate-700">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-slate-700">
                 <tr>
                   {['Drug Name', 'Batch #', 'Qty', 'Expiry Date'].map(h => (
                     <th
                       key={h}
-                      className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap"
+                      className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap"
                     >
                       {h}
                     </th>
                   ))}
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">
                     <button
-                      className="flex items-center gap-1 hover:text-gray-700 transition"
+                      className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-slate-300 transition"
                       onClick={() => setSortAsc(a => !a)}
                     >
                       Days Left
@@ -672,45 +672,45 @@ export default function HeatmapPage() {
                       }
                     </button>
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">
                     Value at Risk (₹)
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
                     Status
                   </th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-slate-700">
                 {tableRows.map(b => {
                   const si = statusInfo(b.daysUntilExpiry);
                   return (
                     <tr
                       key={b.batchId}
-                      className="hover:bg-blue-50 cursor-pointer transition group"
+                      className="hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition group"
                       onClick={() => {
                         setSelectedDay(parseISO(b.expiryDate));
                         setTableOpen(false);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
                     >
-                      <td className="px-4 py-3 font-medium text-gray-800 group-hover:text-blue-600 transition">
+                      <td className="px-4 py-3 font-medium text-gray-800 dark:text-slate-100 group-hover:text-blue-600 transition">
                         {b.drugName}
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-500">
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-slate-400">
                         {b.batchNumber}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">{b.quantity}</td>
-                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                      <td className="px-4 py-3 text-gray-700 dark:text-slate-300">{b.quantity}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-slate-400 whitespace-nowrap">
                         {format(parseISO(b.expiryDate), 'dd MMM yyyy')}
                       </td>
                       <td className="px-4 py-3 font-medium whitespace-nowrap">
                         {b.daysUntilExpiry <= 0
                           ? <span className="text-red-500">Expired</span>
-                          : <span className="text-gray-700">{b.daysUntilExpiry}d</span>
+                          : <span className="text-gray-700 dark:text-slate-300">{b.daysUntilExpiry}d</span>
                         }
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold text-gray-700">
+                      <td className="px-4 py-3 text-right font-semibold text-gray-700 dark:text-slate-200">
                         ₹{inr(b.valueAtRisk)}
                       </td>
                       <td className="px-4 py-3">

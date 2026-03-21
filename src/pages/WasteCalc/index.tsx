@@ -109,14 +109,14 @@ interface MetricCardProps {
 
 function MetricCard({ icon, label, value, description, border, iconBg, valueCls = 'text-gray-800' }: MetricCardProps) {
   return (
-    <div className={`bg-white rounded-xl border ${border} shadow-sm p-4 flex flex-col gap-3`}>
+    <div className={`bg-white dark:bg-slate-800 rounded-xl border ${border} shadow-sm p-4 flex flex-col gap-3`}>
       <div className={`w-9 h-9 rounded-lg ${iconBg} flex items-center justify-center`}>
         {icon}
       </div>
       <div>
         <p className={`text-2xl font-bold leading-none ${valueCls}`}>{value}</p>
-        <p className="text-sm font-medium text-gray-600 mt-1">{label}</p>
-        <p className="text-xs text-gray-400 mt-0.5">{description}</p>
+        <p className="text-sm font-medium text-gray-600 dark:text-slate-300 mt-1">{label}</p>
+        <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{description}</p>
       </div>
     </div>
   );
@@ -126,10 +126,10 @@ function MetricCard({ icon, label, value, description, border, iconBg, valueCls 
 
 function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5">
       <div className="mb-4">
-        <h3 className="font-semibold text-gray-800">{title}</h3>
-        {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+        <h3 className="font-semibold text-gray-800 dark:text-slate-100">{title}</h3>
+        {subtitle && <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -385,13 +385,13 @@ export default function WasteCalcPage() {
   if (loading) {
     return (
       <div className="p-6 space-y-6 animate-pulse">
-        <div className="h-8 bg-gray-200 rounded w-72" />
+        <div className="h-8 bg-gray-200 dark:bg-slate-700 rounded w-72" />
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="col-span-2 h-36 bg-gray-200 rounded-xl" />
-          {[0, 1, 2, 3].map(i => <div key={i} className="h-36 bg-gray-200 rounded-xl" />)}
+          <div className="col-span-2 h-36 bg-gray-200 dark:bg-slate-700 rounded-xl" />
+          {[0, 1, 2, 3].map(i => <div key={i} className="h-36 bg-gray-200 dark:bg-slate-700 rounded-xl" />)}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[0, 1, 2].map(i => <div key={i} className="h-64 bg-gray-200 rounded-xl" />)}
+          {[0, 1, 2].map(i => <div key={i} className="h-64 bg-gray-200 dark:bg-slate-700 rounded-xl" />)}
         </div>
       </div>
     );
@@ -401,9 +401,9 @@ export default function WasteCalcPage() {
   if (!allBatches.length && !dispLogs.length) {
     return (
       <div className="p-6 flex flex-col items-center justify-center h-96 gap-4 text-center">
-        <BarChart3 size={52} className="text-gray-200" />
-        <p className="text-lg font-semibold text-gray-500">No dispense data found.</p>
-        <p className="text-sm text-gray-400 max-w-sm">
+        <BarChart3 size={52} className="text-gray-200 dark:text-slate-700" />
+        <p className="text-lg font-semibold text-gray-500 dark:text-slate-400">No dispense data found.</p>
+        <p className="text-sm text-gray-400 dark:text-slate-500 max-w-sm">
           Ensure the database has been seeded and drugs have been dispensed.
         </p>
       </div>
@@ -418,8 +418,8 @@ export default function WasteCalcPage() {
       <div className="flex items-center gap-2">
         <TrendingUp size={22} className="text-emerald-600" />
         <div>
-          <h1 className="text-xl font-bold text-gray-800">Waste Prevention Dashboard</h1>
-          <p className="text-xs text-gray-400">
+          <h1 className="text-xl font-bold text-gray-800 dark:text-slate-100">Waste Prevention Dashboard</h1>
+          <p className="text-xs text-gray-400 dark:text-slate-500">
             Real-time impact metrics powered by FEFO + ML forecasting
           </p>
         </div>
@@ -510,7 +510,7 @@ export default function WasteCalcPage() {
           {categoryData.length > 0 ? (
             <Doughnut data={donutData} options={donutOptions} />
           ) : (
-            <div className="flex items-center justify-center h-48 text-sm text-gray-400">
+            <div className="flex items-center justify-center h-48 text-sm text-gray-400 dark:text-slate-500">
               No near-expiry batches found.
             </div>
           )}
@@ -526,12 +526,12 @@ export default function WasteCalcPage() {
       </div>
 
       {/* ── With vs Without PharmaGuard ─────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h2 className="font-bold text-gray-800 text-base mb-1 flex items-center gap-2">
-          <BarChart3 size={18} className="text-gray-400" />
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5">
+        <h2 className="font-bold text-gray-800 dark:text-slate-100 text-base mb-1 flex items-center gap-2">
+          <BarChart3 size={18} className="text-gray-400 dark:text-slate-500" />
           With vs Without PharmaGuard Gujarat
         </h2>
-        <p className="text-xs text-gray-400 mb-4">
+        <p className="text-xs text-gray-400 dark:text-slate-500 mb-4">
           Baseline: CAG audit — manual FEFO compliance ~60% in Gujarat government hospitals
         </p>
 
@@ -609,38 +609,38 @@ export default function WasteCalcPage() {
       </div>
 
       {/* ── Methodology (collapsible) ────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
         <button
           onClick={() => setMethodOpen(o => !o)}
-          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition text-left"
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition text-left"
         >
           <div>
-            <span className="font-semibold text-gray-700">How We Calculate These Numbers</span>
-            <span className="text-xs text-gray-400 block mt-0.5">
+            <span className="font-semibold text-gray-700 dark:text-slate-200">How We Calculate These Numbers</span>
+            <span className="text-xs text-gray-400 dark:text-slate-500 block mt-0.5">
               Methodology, data sources &amp; references — important for audit transparency
             </span>
           </div>
           {methodOpen
-            ? <ChevronUp size={18} className="text-gray-400 shrink-0" />
-            : <ChevronDown size={18} className="text-gray-400 shrink-0" />
+            ? <ChevronUp size={18} className="text-gray-400 dark:text-slate-500 shrink-0" />
+            : <ChevronDown size={18} className="text-gray-400 dark:text-slate-500 shrink-0" />
           }
         </button>
 
         {methodOpen && (
-          <div className="border-t border-gray-100 px-5 py-5 space-y-5 text-sm text-gray-600">
+          <div className="border-t border-gray-100 dark:border-slate-700 px-5 py-5 space-y-5 text-sm text-gray-600 dark:text-slate-300">
 
             <div>
-              <h4 className="font-semibold text-gray-800 mb-2">Metric Definitions</h4>
+              <h4 className="font-semibold text-gray-800 dark:text-slate-100 mb-2">Metric Definitions</h4>
               <ul className="space-y-3">
                 <li className="flex gap-3">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 mt-1.5" />
                   <div>
-                    <span className="font-medium text-gray-700">Total ₹ Saved</span>
+                    <span className="font-medium text-gray-700 dark:text-slate-200">Total ₹ Saved</span>
                     <span className="text-gray-500"> = </span>
-                    <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">
+                    <code className="bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs font-mono">
                       Rescued Value + Expired Value at Risk
                     </code>
-                    <p className="text-gray-400 text-xs mt-0.5">
+                    <p className="text-gray-400 dark:text-slate-500 text-xs mt-0.5">
                       Sum of what was actively rescued through FEFO dispense ordering,
                       plus the value of expired stock flagged by the system before it was silently discarded.
                     </p>
@@ -649,8 +649,8 @@ export default function WasteCalcPage() {
                 <li className="flex gap-3">
                   <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0 mt-1.5" />
                   <div>
-                    <span className="font-medium text-gray-700">Units Rescued by FEFO</span>
-                    <p className="text-gray-400 text-xs mt-0.5">
+                    <span className="font-medium text-gray-700 dark:text-slate-200">Units Rescued by FEFO</span>
+                    <p className="text-gray-400 dark:text-slate-500 text-xs mt-0.5">
                       Dispense log entries where the corresponding batch's expiry date was within 60 days
                       of the dispense timestamp. Without FEFO ordering, these batches would likely have been
                       dispensed after expiry (or left to expire).
@@ -660,10 +660,10 @@ export default function WasteCalcPage() {
                 <li className="flex gap-3">
                   <span className="w-2 h-2 rounded-full bg-red-400 shrink-0 mt-1.5" />
                   <div>
-                    <span className="font-medium text-gray-700">Expired Batches Caught</span>
-                    <p className="text-gray-400 text-xs mt-0.5">
+                    <span className="font-medium text-gray-700 dark:text-slate-200">Expired Batches Caught</span>
+                    <p className="text-gray-400 dark:text-slate-500 text-xs mt-0.5">
                       Batches where <code className="bg-gray-100 px-1 rounded text-xs font-mono">expiryDate &lt; today</code> and{' '}
-                      <code className="bg-gray-100 px-1 rounded text-xs font-mono">quantity &gt; 0</code>.
+                      <code className="bg-gray-100 dark:bg-slate-700 px-1 rounded text-xs font-mono">quantity &gt; 0</code>.
                       The system raised alerts for these before silent disposal. Value = qty × costPerUnit.
                     </p>
                   </div>
@@ -671,8 +671,8 @@ export default function WasteCalcPage() {
                 <li className="flex gap-3">
                   <span className="w-2 h-2 rounded-full bg-violet-400 shrink-0 mt-1.5" />
                   <div>
-                    <span className="font-medium text-gray-700">Stock-outs Prevented</span>
-                    <p className="text-gray-400 text-xs mt-0.5">
+                    <span className="font-medium text-gray-700 dark:text-slate-200">Stock-outs Prevented</span>
+                    <p className="text-gray-400 dark:text-slate-500 text-xs mt-0.5">
                       Drugs currently between 100–150% of their reorder level — the ML forecasting
                       system would have triggered a reorder alert before stockout occurred.
                     </p>
@@ -681,8 +681,8 @@ export default function WasteCalcPage() {
                 <li className="flex gap-3">
                   <span className="w-2 h-2 rounded-full bg-green-400 shrink-0 mt-1.5" />
                   <div>
-                    <span className="font-medium text-gray-700">CO₂ Reduction</span>
-                    <p className="text-gray-400 text-xs mt-0.5">
+                    <span className="font-medium text-gray-700 dark:text-slate-200">CO₂ Reduction</span>
+                    <p className="text-gray-400 dark:text-slate-500 text-xs mt-0.5">
                       Estimated at 0.002 kg CO₂ per pharmaceutical unit avoided from landfill or
                       incineration (conservative estimate based on pharma waste literature).
                     </p>
@@ -691,8 +691,8 @@ export default function WasteCalcPage() {
                 <li className="flex gap-3">
                   <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0 mt-1.5" />
                   <div>
-                    <span className="font-medium text-gray-700">Monthly Potential Waste (Bar Chart)</span>
-                    <p className="text-gray-400 text-xs mt-0.5">
+                    <span className="font-medium text-gray-700 dark:text-slate-200">Monthly Potential Waste (Bar Chart)</span>
+                    <p className="text-gray-400 dark:text-slate-500 text-xs mt-0.5">
                       Simulates manual 60% FEFO compliance baseline. If near-expiry dispenses achieved
                       ₹X in that month, the total near-expiry inventory = X/0.6. The wasted portion
                       under manual tracking = total × 0.4.
@@ -713,8 +713,8 @@ export default function WasteCalcPage() {
               </p>
             </div>
 
-            <div className="text-xs text-gray-400 space-y-1">
-              <p className="font-medium text-gray-500">References</p>
+            <div className="text-xs text-gray-400 dark:text-slate-500 space-y-1">
+              <p className="font-medium text-gray-500 dark:text-slate-400">References</p>
               <p>· IJRMP 2025 — Hospital pharmacy FEFO implementation studies (33–42% waste reduction)</p>
               <p>· CAG Audit Report — Drug procurement and storage in Gujarat government hospitals</p>
               <p>· WHO Guidelines on pharmaceutical waste management (CO₂ estimates)</p>

@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  collection, onSnapshot, getDocs, query, where, orderBy, limit, Timestamp,
+  collection, onSnapshot, getDocs, query, where, limit,
 } from 'firebase/firestore';
 import {
-  format, formatDistanceToNow, startOfToday, subDays, isSameDay,
+  format, formatDistanceToNow, startOfToday, subDays, isSameDay, parseISO,
 } from 'date-fns';
 import {
   Package, AlertTriangle, Clock, Activity, Bell,
@@ -44,7 +44,7 @@ interface DispenseLog {
   drugName: string;
   quantity: number;
   dispensedBy?: string;
-  timestamp: Timestamp | null;
+  timestamp: string;
 }
 
 interface AlertDoc {
@@ -54,17 +54,17 @@ interface AlertDoc {
   message?: string;
   description?: string;
   read: boolean;
-  createdAt?: Timestamp | null;
+  createdAt?: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function tsToDate(ts: Timestamp | null | undefined): Date | null {
-  if (!ts || !(ts instanceof Timestamp)) return null;
-  return ts.toDate();
+function tsToDate(ts: string | null | undefined): Date | null {
+  if (!ts) return null;
+  try { return parseISO(ts); } catch { return null; }
 }
 
-function relativeTime(ts: Timestamp | null | undefined): string {
+function relativeTime(ts: string | null | undefined): string {
   const d = tsToDate(ts);
   if (!d) return '—';
   return formatDistanceToNow(d, { addSuffix: true });
@@ -174,18 +174,23 @@ export default function DashboardPage() {
   }, [drugs.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Dispense logs (last 7 days + recent 10) ───────────────────────────────
+  // Fetch all logs then filter client-side (timestamps are ISO strings, not
+  // Firestore Timestamps, so a where() Timestamp comparison would return nothing)
   useEffect(() => {
-    const sevenAgoTs = Timestamp.fromDate(subDays(new Date(), 7));
-    const logsQ = query(
-      collection(db, 'dispenseLogs'),
-      where('timestamp', '>=', sevenAgoTs),
-      orderBy('timestamp', 'desc'),
-      limit(200),
-    );
-    getDocs(logsQ).then(snap => {
+    const sevenAgo = subDays(new Date(), 7);
+    getDocs(collection(db, 'dispenseLogs')).then(snap => {
       const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as DispenseLog));
-      setWeekLogs(all);
-      setRecentLogs(all.slice(0, 10));
+      const week = all.filter(l => {
+        const d = tsToDate(l.timestamp);
+        return d ? d >= sevenAgo : false;
+      });
+      week.sort((a, b) => {
+        const da = tsToDate(a.timestamp)?.getTime() ?? 0;
+        const db = tsToDate(b.timestamp)?.getTime() ?? 0;
+        return db - da; // most recent first
+      });
+      setWeekLogs(week);
+      setRecentLogs(week.slice(0, 10));
       setLogsLoading(false);
     }).catch(() => setLogsLoading(false));
   }, []);

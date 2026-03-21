@@ -3,6 +3,7 @@ PharmaGuard Gujarat — ML Forecasting Backend
 Flask API using scikit-learn LinearRegression for drug demand prediction.
 """
 
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from sklearn.linear_model import LinearRegression
@@ -15,7 +16,7 @@ from datetime import datetime, timedelta
 app = Flask(__name__)
 
 # Allow requests from both Vite dev server ports
-CORS(app, origins=["http://localhost:5173", "http://localhost:5174"])
+CORS(app, origins="*")
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -303,7 +304,5 @@ def predict_all():
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("PharmaGuard Gujarat — ML Backend")
-    print("Model : LinearRegression (scikit-learn)")
-    print("Server: http://localhost:5000")
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)

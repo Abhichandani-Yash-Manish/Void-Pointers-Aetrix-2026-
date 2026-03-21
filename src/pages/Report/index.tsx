@@ -310,6 +310,17 @@ export default function ReportPage() {
       y += 7;
     });
 
+    doc.setFontSize(8.5);
+    doc.setTextColor(130, 130, 130);
+    const caveatLines = doc.splitTextToSize(
+      'Note: FEFO Compliance is calculated against current batch inventory. Historical compliance may vary as batches are added or depleted.',
+      CW - 4
+    );
+    doc.text(caveatLines, ML + 2, y);
+    y += caveatLines.length * 6;
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+
     y += 5;
     doc.setDrawColor(200, 200, 200);
     doc.line(ML, y, PW - ML, y);
@@ -459,9 +470,9 @@ export default function ReportPage() {
   if (loading) {
     return (
       <div className="p-6 space-y-5 animate-pulse">
-        <div className="h-8 bg-gray-200 rounded w-64" />
-        <div className="h-36 bg-gray-200 rounded-xl" />
-        <div className="h-[900px] bg-gray-200 rounded-xl" />
+        <div className="h-8 bg-gray-200 dark:bg-slate-700 rounded w-64" />
+        <div className="h-36 bg-gray-200 dark:bg-slate-700 rounded-xl" />
+        <div className="h-[900px] bg-gray-200 dark:bg-slate-700 rounded-xl" />
       </div>
     );
   }
@@ -474,41 +485,41 @@ export default function ReportPage() {
       <div className="flex items-center gap-2">
         <FileText size={22} className="text-blue-700" />
         <div>
-          <h1 className="text-xl font-bold text-gray-800">Impact Report Generator</h1>
-          <p className="text-xs text-gray-400">Configure, preview, and download your pharmacy impact report</p>
+          <h1 className="text-xl font-bold text-gray-800 dark:text-slate-100">Impact Report Generator</h1>
+          <p className="text-xs text-gray-400 dark:text-slate-500">Configure, preview, and download your pharmacy impact report</p>
         </div>
       </div>
 
       {/* ── Config panel ──────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h2 className="font-semibold text-gray-700 mb-4">Report Configuration</h2>
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5">
+        <h2 className="font-semibold text-gray-700 dark:text-slate-200 mb-4">Report Configuration</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Hospital Name</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1">Hospital Name</label>
             <input
               type="text"
               value={hospitalName}
               onChange={e => setHospitalName(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="w-full border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-slate-100 bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Reporting Officer</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1">Reporting Officer</label>
             <input
               type="text"
               value={officerName}
               onChange={e => setOfficerName(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="w-full border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-slate-100 bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
             />
           </div>
         </div>
 
         <div className="mb-5">
           <label className="block text-xs font-medium text-gray-500 mb-1">
-            Report Period <span className="text-gray-400 font-normal">(auto-calculated from dispense logs)</span>
+            Report Period <span className="text-gray-400 dark:text-slate-500 font-normal">(auto-calculated from dispense logs)</span>
           </label>
-          <p className="text-sm font-medium text-gray-700 border border-gray-100 rounded-lg px-3 py-2 bg-gray-50">
+          <p className="text-sm font-medium text-gray-700 dark:text-slate-200 border border-gray-100 dark:border-slate-600 rounded-lg px-3 py-2 bg-gray-50 dark:bg-slate-700">
             {reportPeriod}
           </p>
         </div>
@@ -655,6 +666,9 @@ export default function ReportPage() {
                     <span className="font-semibold text-emerald-700 ml-1">₹{inr(rd.valueSaved)}</span>
                   </li>
                 </ul>
+                <p className="text-xs text-gray-400 mt-3 italic">
+                  Note: FEFO Compliance is calculated against current batch inventory. Historical compliance may vary as batches are added or depleted.
+                </p>
               </section>
               <hr className="border-gray-200" />
 

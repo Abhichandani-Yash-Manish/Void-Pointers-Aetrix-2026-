@@ -29,6 +29,7 @@ import {
   BarChart2,
 } from 'lucide-react';
 import { db } from '../../config/firebase';
+import { API_BASE } from '../../config/api';
 import type { Drug, DispenseLog } from '../../types';
 
 // ── Chart.js registration ─────────────────────────────────────────────────────
@@ -38,7 +39,6 @@ ChartJS.register(
 );
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const BACKEND_URL  = 'http://localhost:5000';
 const FETCH_TIMEOUT = 5000; // ms before marking backend unreachable
 
 // ── Local types ───────────────────────────────────────────────────────────────
@@ -49,11 +49,15 @@ interface WeeklyPoint {
 }
 
 interface PredictionMetrics {
-  r2_score:  number;
-  mape:      number;
-  trend:     'increasing' | 'decreasing' | 'stable';
-  slope:     number;
-  intercept: number;
+  r2_score:           number;
+  mape:               number;
+  trend:              'increasing' | 'decreasing' | 'stable';
+  slope:              number;
+  intercept:          number;
+  mae?:               number;
+  smape?:             number;
+  relative_slope_pct?: number;
+  avg_weekly_demand?: number;
 }
 
 interface ReorderSuggestion {
@@ -342,7 +346,7 @@ export default function ForecastPage() {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
 
-        const res = await fetch(`${BACKEND_URL}/api/predict-all`, {
+        const res = await fetch(`${API_BASE}/api/predict-all`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify(payload),
@@ -713,13 +717,19 @@ export default function ForecastPage() {
                 <p className="text-[11px] text-slate-400 mt-1.5">Model fit quality</p>
               </div>
 
-              {/* MAPE */}
+              {/* SMAPE / MAPE */}
               <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-                <p className="text-xs text-slate-400 mb-1.5">MAPE</p>
-                <span className={`inline-block text-sm font-bold px-2 py-0.5 rounded-full ${mapeColor(selectedPred.metrics.mape)}`}>
-                  {selectedPred.metrics.mape.toFixed(1)}%
+                <p className="text-xs text-slate-400 mb-1.5">
+                  {selectedPred.metrics.smape !== undefined ? 'SMAPE' : 'MAPE'}
+                </p>
+                <span className={`inline-block text-sm font-bold px-2 py-0.5 rounded-full ${mapeColor(selectedPred.metrics.smape ?? selectedPred.metrics.mape)}`}>
+                  {(selectedPred.metrics.smape ?? selectedPred.metrics.mape).toFixed(1)}%
                 </span>
-                <p className="text-[11px] text-slate-400 mt-1.5">Mean abs % error</p>
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                  {selectedPred.metrics.mae !== undefined
+                    ? `MAE: ${selectedPred.metrics.mae.toFixed(1)} units/wk`
+                    : 'Mean abs % error'}
+                </p>
               </div>
 
               {/* Trend */}
