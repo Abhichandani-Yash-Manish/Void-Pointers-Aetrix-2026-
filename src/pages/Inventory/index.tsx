@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import {
-  collection, doc, onSnapshot, getDocs,
+  collection, doc, onSnapshot, getDocs, writeBatch,
   addDoc, updateDoc, deleteDoc, increment,
 } from 'firebase/firestore';
 import { format, differenceInDays, parseISO, isPast } from 'date-fns';
@@ -77,15 +77,15 @@ function SummaryCard({
   loading?: boolean;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-start gap-4">
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 flex items-start gap-4">
       <div className={`${iconBg} rounded-lg p-2.5 shrink-0`}>{icon}</div>
       <div className="min-w-0">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">{label}</p>
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">{label}</p>
         {loading
-          ? <div className="h-7 w-16 bg-slate-100 rounded animate-pulse" />
-          : <p className="text-2xl font-bold text-slate-800 leading-none">{value}</p>
+          ? <div className="h-7 w-16 bg-slate-100 dark:bg-slate-700 rounded animate-pulse" />
+          : <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 leading-none">{value}</p>
         }
-        {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+        {sub && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{sub}</p>}
       </div>
     </div>
   );
@@ -127,32 +127,32 @@ function BatchTable({
       });
       await updateDoc(doc(db, 'drugs', drugId), { currentStock: increment(qty) });
       setForm(BLANK_BATCH); setShowAdd(false);
-    } catch { setFormErr('Failed to save batch.'); }
+    } catch (err) { console.error('Add batch:', err); setFormErr('Failed to save batch.'); }
     finally { setSaving(false); }
   };
 
   if (batchLoading) {
     return (
-      <div className="bg-slate-50 border-t border-slate-100 px-8 py-4 flex items-center gap-2 text-slate-400 text-sm">
+      <div className="bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700 px-8 py-4 flex items-center gap-2 text-slate-400 dark:text-slate-500 text-sm">
         <Loader2 size={14} className="animate-spin" /> Loading batches…
       </div>
     );
   }
 
   return (
-    <div className="bg-slate-50/70 border-t border-slate-200">
+    <div className="bg-slate-50/70 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700">
       {/* Batch header */}
-      <div className="px-6 py-2.5 flex items-center justify-between border-b border-slate-200 bg-slate-100/60">
+      <div className="px-6 py-2.5 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-slate-100/60 dark:bg-slate-800/80">
         <div className="flex items-center gap-2">
-          <FlaskConical size={13} className="text-slate-400" />
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <FlaskConical size={13} className="text-slate-400 dark:text-slate-500" />
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             {sorted.length} batch{sorted.length !== 1 && 'es'} · {drugName} · FEFO order
           </span>
         </div>
         {isAdmin && (
           <button
             onClick={() => { setShowAdd(v => !v); setFormErr(''); }}
-            className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-800 bg-white hover:bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+            className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 bg-white dark:bg-slate-700 hover:bg-emerald-50 dark:hover:bg-slate-600 border border-emerald-200 dark:border-emerald-700 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
           >
             {showAdd ? <X size={12} /> : <Plus size={12} />}
             {showAdd ? 'Cancel' : 'Add Batch'}
@@ -162,36 +162,36 @@ function BatchTable({
 
       {/* Batch rows */}
       {sorted.length === 0 && !showAdd ? (
-        <p className="px-8 py-3 text-sm text-slate-400">No batches recorded for this drug.</p>
+        <p className="px-8 py-3 text-sm text-slate-400 dark:text-slate-500">No batches recorded for this drug.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-white border-b border-slate-200">
+              <tr className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                 {['Batch Number', 'Quantity', 'Expiry Date', 'Received Date', '₹/Unit', 'Batch Value'].map(h => (
-                  <th key={h} className={`px-5 py-2 font-semibold text-slate-500 ${h === 'Quantity' || h === '₹/Unit' || h === 'Batch Value' ? 'text-right' : 'text-left'}`}>
+                  <th key={h} className={`px-5 py-2 font-semibold text-slate-500 dark:text-slate-400 ${h === 'Quantity' || h === '₹/Unit' || h === 'Batch Value' ? 'text-right' : 'text-left'}`}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {sorted.map(batch => {
                 const exp = getExpiryInfo(batch.expiryDate);
                 return (
-                  <tr key={batch.id} className="hover:bg-white/80 transition-colors">
-                    <td className="px-5 py-2.5 font-mono text-slate-700 font-medium">{batch.batchNumber}</td>
-                    <td className="px-5 py-2.5 text-right font-semibold text-slate-700">{batch.quantity.toLocaleString('en-IN')}</td>
+                  <tr key={batch.id} className="hover:bg-white/80 dark:hover:bg-slate-700/50 transition-colors">
+                    <td className="px-5 py-2.5 font-mono text-slate-700 dark:text-slate-200 font-medium">{batch.batchNumber}</td>
+                    <td className="px-5 py-2.5 text-right font-semibold text-slate-700 dark:text-slate-200">{batch.quantity.toLocaleString('en-IN')}</td>
                     <td className="px-5 py-2.5">
                       <span className={`inline-block px-2 py-0.5 rounded-full font-medium ${exp.bg} ${exp.text}`}>
                         {exp.label}
                       </span>
                     </td>
-                    <td className="px-5 py-2.5 text-slate-500">
+                    <td className="px-5 py-2.5 text-slate-500 dark:text-slate-400">
                       {format(parseISO(batch.receivedDate), 'dd MMM yyyy')}
                     </td>
-                    <td className="px-5 py-2.5 text-right text-slate-600">₹{batch.costPerUnit.toFixed(2)}</td>
-                    <td className="px-5 py-2.5 text-right font-medium text-slate-700">
+                    <td className="px-5 py-2.5 text-right text-slate-600 dark:text-slate-300">₹{batch.costPerUnit.toFixed(2)}</td>
+                    <td className="px-5 py-2.5 text-right font-medium text-slate-700 dark:text-slate-200">
                       {formatINR(batch.quantity * batch.costPerUnit)}
                     </td>
                   </tr>
@@ -204,10 +204,10 @@ function BatchTable({
 
       {/* Add batch inline form */}
       {showAdd && (
-        <div className="px-6 py-4 border-t border-slate-200 bg-white">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">New Batch Entry</p>
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">New Batch Entry</p>
           {formErr && (
-            <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg mb-3">{formErr}</p>
+            <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 rounded-lg mb-3">{formErr}</p>
           )}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
             {[
@@ -225,7 +225,7 @@ function BatchTable({
                 step={f.type === 'number' ? '0.01' : undefined}
                 min={f.type === 'number' ? '0' : undefined}
                 onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg text-xs bg-slate-50 dark:bg-slate-700 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             ))}
             <button
@@ -282,23 +282,23 @@ function DrugModal({
         await addDoc(collection(db, 'drugs'), { ...payload, currentStock: 0 });
       }
       onSaved();
-    } catch { setErr('Save failed. Please try again.'); setSave(false); }
+    } catch (err) { console.error('Save drug:', err); setErr('Save failed. Please try again.'); setSave(false); }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         {/* Modal header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
           <div className="flex items-center gap-2.5">
-            <div className="bg-emerald-100 rounded-lg p-1.5">
-              <Package size={16} className="text-emerald-700" />
+            <div className="bg-emerald-100 dark:bg-emerald-900/40 rounded-lg p-1.5">
+              <Package size={16} className="text-emerald-700 dark:text-emerald-400" />
             </div>
-            <h2 className="font-semibold text-slate-800 text-base">
+            <h2 className="font-semibold text-slate-800 dark:text-slate-100 text-base">
               {editDrug ? 'Edit Drug' : 'Add New Drug'}
             </h2>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+          <button onClick={onClose} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
             <X size={20} />
           </button>
         </div>
@@ -306,39 +306,39 @@ function DrugModal({
         {/* Form */}
         <div className="px-6 py-5 space-y-4">
           {err && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
               <ShieldAlert size={14} className="shrink-0" />{err}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Drug Name *</label>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Drug Name *</label>
             <input
               value={form.name}
               onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
               placeholder="e.g. Paracetamol 500mg"
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-slate-50 dark:bg-slate-700 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Category *</label>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Category *</label>
               <select
                 value={form.category}
                 onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-slate-50 dark:bg-slate-700 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               >
                 <option value="">Select…</option>
                 {allCats.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Unit *</label>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Unit *</label>
               <select
                 value={form.unit}
                 onChange={e => setForm(p => ({ ...p, unit: e.target.value }))}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-slate-50 dark:bg-slate-700 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               >
                 {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
@@ -346,24 +346,24 @@ function DrugModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Reorder Level *</label>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Reorder Level *</label>
             <input
               type="number"
               min="0"
               value={form.reorderLevel}
               onChange={e => setForm(p => ({ ...p, reorderLevel: e.target.value }))}
               placeholder="e.g. 200"
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-slate-50 dark:bg-slate-700 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
-            <p className="text-xs text-slate-400 mt-1">Alert triggers when current stock falls at or below this value.</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Alert triggers when current stock falls at or below this value.</p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 border border-slate-200 rounded-lg hover:bg-white transition-colors"
+            className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-white dark:hover:bg-slate-700 transition-colors"
           >
             Cancel
           </button>
@@ -390,23 +390,23 @@ function DeleteConfirmModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
         <div className="flex items-center gap-3 mb-3">
-          <div className="bg-red-100 rounded-lg p-2">
-            <Trash2 size={18} className="text-red-600" />
+          <div className="bg-red-100 dark:bg-red-900/40 rounded-lg p-2">
+            <Trash2 size={18} className="text-red-600 dark:text-red-400" />
           </div>
-          <h2 className="font-semibold text-slate-800">Delete Drug?</h2>
+          <h2 className="font-semibold text-slate-800 dark:text-slate-100">Delete Drug?</h2>
         </div>
-        <p className="text-sm text-slate-600 mb-1">
+        <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">
           This will permanently delete <strong>{drug.name}</strong>.
         </p>
-        <p className="text-xs text-slate-400 mb-5">
-          Note: batch sub-documents will remain in Firestore but won't be accessible from the UI.
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-5">
+          This will also permanently delete all batch records for this drug.
         </p>
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium py-2.5 rounded-lg transition-colors"
+            className="flex-1 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium py-2.5 rounded-lg transition-colors"
           >
             Cancel
           </button>
@@ -485,7 +485,7 @@ export default function InventoryPage() {
       });
       setBatchesLoading(false);
     });
-  }, [drugs.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [drugs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived: categories ───────────────────────────────────────────────────
   const categories = useMemo(() => {
@@ -558,9 +558,15 @@ export default function InventoryPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await deleteDoc(doc(db, 'drugs', deleteTarget.id));
+      const batchSnap = await getDocs(collection(db, 'drugs', deleteTarget.id, 'batches'));
+      const wb = writeBatch(db);
+      batchSnap.docs.forEach(d => wb.delete(d.ref));
+      wb.delete(doc(db, 'drugs', deleteTarget.id));
+      await wb.commit();
       if (expandedId === deleteTarget.id) setExpandedId(null);
       setDeleteTarget(null);
+    } catch (err) {
+      console.error('Delete drug:', err);
     } finally { setDeleting(false); }
   };
 
@@ -570,8 +576,8 @@ export default function InventoryPage() {
       {/* ── Page header ── */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Drug Inventory</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Gujarat Essential Drug List — real-time stock</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Drug Inventory</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Gujarat Essential Drug List — real-time stock</p>
         </div>
         {isAdmin && (
           <button
@@ -620,20 +626,20 @@ export default function InventoryPage() {
       {/* ── Toolbar ── */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search drugs or categories…"
-            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent shadow-sm"
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent shadow-sm"
           />
         </div>
         <div className="relative">
-          <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
           <select
             value={catFilter}
             onChange={e => setCatFilter(e.target.value)}
-            className="pl-8 pr-8 py-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent shadow-sm appearance-none min-w-[180px]"
+            className="pl-8 pr-8 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent shadow-sm appearance-none min-w-[180px]"
           >
             <option value="">All Categories</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -643,27 +649,27 @@ export default function InventoryPage() {
 
       {/* ── Table ── */}
       {drugsLoading ? (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-center py-16">
-          <div className="flex flex-col items-center gap-3 text-slate-400">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center py-16">
+          <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-500">
             <Loader2 size={28} className="animate-spin" />
             <p className="text-sm">Loading inventory…</p>
           </div>
         </div>
       ) : filteredSorted.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-center py-16">
-          <div className="text-center text-slate-400">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center py-16">
+          <div className="text-center text-slate-400 dark:text-slate-500">
             <Package size={36} className="mx-auto mb-2 opacity-40" />
             <p className="text-sm font-medium">No drugs found</p>
             <p className="text-xs mt-1">Try adjusting your search or filter</p>
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               {/* ── Table head ── */}
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
+                <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
                   {/* Expand toggle column */}
                   <th className="w-10 px-4 py-3" />
 
@@ -679,7 +685,7 @@ export default function InventoryPage() {
                     <th
                       key={col.key}
                       onClick={() => toggleSort(col.key)}
-                      className={`px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider cursor-pointer select-none hover:bg-slate-100 transition-colors ${col.align === 'right' ? 'text-right' : 'text-left'}`}
+                      className={`px-4 py-3 font-semibold text-slate-600 dark:text-slate-400 text-xs uppercase tracking-wider cursor-pointer select-none hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${col.align === 'right' ? 'text-right' : 'text-left'}`}
                     >
                       <span className={`inline-flex items-center gap-1.5 ${col.align === 'right' ? 'flex-row-reverse' : ''}`}>
                         {col.label}
@@ -688,8 +694,8 @@ export default function InventoryPage() {
                     </th>
                   ))}
 
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
 
@@ -706,13 +712,13 @@ export default function InventoryPage() {
                       {/* ── Drug row ── */}
                       <tr
                         key={drug.id}
-                        className={`border-b border-slate-100 hover:bg-slate-50/70 transition-colors ${isExpanded ? 'bg-slate-50/70' : ''}`}
+                        className={`border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50/70 dark:hover:bg-slate-700/40 transition-colors ${isExpanded ? 'bg-slate-50/70 dark:bg-slate-700/30' : ''}`}
                       >
                         {/* Expand toggle */}
                         <td className="w-10 px-4 py-3">
                           <button
                             onClick={() => setExpandedId(isExpanded ? null : drug.id)}
-                            className="text-slate-400 hover:text-slate-600 transition-colors"
+                            className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                             title={isExpanded ? 'Collapse batches' : 'Expand batches'}
                           >
                             {isExpanded
@@ -726,7 +732,7 @@ export default function InventoryPage() {
                         <td className="px-4 py-3">
                           <button
                             onClick={() => setExpandedId(isExpanded ? null : drug.id)}
-                            className="font-semibold text-slate-800 hover:text-emerald-700 transition-colors text-left"
+                            className="font-semibold text-slate-800 dark:text-slate-100 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors text-left"
                           >
                             {drug.name}
                           </button>
@@ -734,13 +740,13 @@ export default function InventoryPage() {
 
                         {/* Category */}
                         <td className="px-4 py-3">
-                          <span className="inline-block bg-slate-100 text-slate-600 text-xs font-medium px-2.5 py-1 rounded-full">
+                          <span className="inline-block bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium px-2.5 py-1 rounded-full">
                             {drug.category}
                           </span>
                         </td>
 
                         {/* Unit */}
-                        <td className="px-4 py-3 text-slate-500 capitalize">{drug.unit}</td>
+                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400 capitalize">{drug.unit}</td>
 
                         {/* Current stock */}
                         <td className="px-4 py-3 text-right">
@@ -763,10 +769,10 @@ export default function InventoryPage() {
                                 if (e.key === 'Enter') saveReorder(drug);
                                 if (e.key === 'Escape') setEditReorderId(null);
                               }}
-                              className="w-20 px-2 py-1 border-2 border-emerald-400 rounded-lg text-sm text-right font-semibold focus:outline-none bg-emerald-50"
+                              className="w-20 px-2 py-1 border-2 border-emerald-400 dark:border-emerald-500 rounded-lg text-sm text-right font-semibold focus:outline-none bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-100"
                             />
                           ) : (
-                            <span className="text-slate-600 tabular-nums">{drug.reorderLevel.toLocaleString('en-IN')}</span>
+                            <span className="text-slate-600 dark:text-slate-300 tabular-nums">{drug.reorderLevel.toLocaleString('en-IN')}</span>
                           )}
                         </td>
 
@@ -786,7 +792,7 @@ export default function InventoryPage() {
                               <button
                                 onClick={() => isAdmin ? (setDrugModalEdit(drug), setDrugModalOpen(true)) : startEditReorder(drug)}
                                 title={isAdmin ? 'Edit drug' : 'Edit reorder level'}
-                                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-lg transition-colors"
                               >
                                 <Pencil size={14} />
                               </button>
@@ -796,7 +802,7 @@ export default function InventoryPage() {
                               <button
                                 onClick={() => setDeleteTarget(drug)}
                                 title="Delete drug"
-                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -827,7 +833,7 @@ export default function InventoryPage() {
           </div>
 
           {/* Table footer */}
-          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-400">
+          <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
             <span>
               Showing {filteredSorted.length} of {drugs.length} drugs
               {(search || catFilter) && ' (filtered)'}
