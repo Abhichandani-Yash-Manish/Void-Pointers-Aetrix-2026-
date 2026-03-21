@@ -3,11 +3,11 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
-  User,
 } from 'firebase/auth';
+import type { User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
-import { UserProfile } from '../types';
+import type { UserProfile } from '../types';
 
 interface AuthContextType {
   user: User | null;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { Drug } from '../../types';
+import type { Drug } from '../../types';
 
 export default function InventoryPage() {
   const [drugs, setDrugs] = useState<Drug[]>([]);

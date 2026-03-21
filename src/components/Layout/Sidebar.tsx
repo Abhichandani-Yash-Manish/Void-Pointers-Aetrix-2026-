@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { UserRole } from '../../types';
+import type { UserRole } from '../../types';
 
 interface NavItem {
   to: string;

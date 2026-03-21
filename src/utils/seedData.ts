@@ -1,6 +1,6 @@
-import { collection, doc, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { Drug, Batch } from '../types';
+import type { Drug, Batch } from '../types';
 
 const drugs: Omit<Drug, 'id'>[] = [
   { name: 'Paracetamol 500mg', category: 'Analgesic', unit: 'tablet', reorderLevel: 200, currentStock: 850 },
