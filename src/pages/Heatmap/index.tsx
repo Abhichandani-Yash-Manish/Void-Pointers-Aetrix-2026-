@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import type { Drug, Batch } from '../../types';
 import {
@@ -98,11 +98,11 @@ function cellBg(batches: FlatBatch[]): string {
   return               ['bg-sky-100',    'bg-sky-200',    'bg-sky-300'   ][idx];
 }
 
-function statusInfo(days: number): { label: string; cls: string } {
-  if (days <= 0)  return { label: 'EXPIRED',  cls: 'bg-red-100 text-red-700 border border-red-200' };
-  if (days <= 7)  return { label: 'CRITICAL', cls: 'bg-orange-100 text-orange-700 border border-orange-200' };
-  if (days <= 30) return { label: 'WARNING',  cls: 'bg-yellow-100 text-yellow-700 border border-yellow-200' };
-  return               { label: 'OK',        cls: 'bg-green-100 text-green-700 border border-green-200' };
+function statusInfo(days: number, nearExpiryDays: number): { label: string; cls: string } {
+  if (days <= 0)              return { label: 'EXPIRED',  cls: 'bg-red-100 text-red-700 border border-red-200' };
+  if (days <= 7)              return { label: 'CRITICAL', cls: 'bg-orange-100 text-orange-700 border border-orange-200' };
+  if (days <= nearExpiryDays) return { label: 'WARNING',  cls: 'bg-yellow-100 text-yellow-700 border border-yellow-200' };
+  return                             { label: 'OK',       cls: 'bg-green-100 text-green-700 border border-green-200' };
 }
 
 // ─── StatCard ──────────────────────────────────────────────────────────────
@@ -218,6 +218,7 @@ function MonthGrid({ monthStart, byDay, selectedDay, onSelect }: MonthGridProps)
 export default function HeatmapPage() {
   const [allBatches,  setAllBatches]  = useState<FlatBatch[]>([]);
   const [loading,     setLoading]     = useState(true);
+  const [nearExpiryDays, setNearExpiryDays] = useState(30);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [windowStart, setWindowStart] = useState(startOfMonth(TODAY));
   const [drugFilter,  setDrugFilter]  = useState('all');
@@ -225,6 +226,16 @@ export default function HeatmapPage() {
   const [urgency,     setUrgency]     = useState<UrgencyFilter>('all');
   const [tableOpen,   setTableOpen]   = useState(false);
   const [sortAsc,     setSortAsc]     = useState(true);
+
+  // ── Fetch near-expiry threshold from Firestore config ──────────────────
+  useEffect(() => {
+    getDoc(doc(db, 'config', 'settings')).then(snap => {
+      if (snap.exists()) {
+        const days = snap.data().nearExpiryDays as number;
+        if (days && days > 0) setNearExpiryDays(days);
+      }
+    }).catch(console.error);
+  }, []);
 
   // ── Load data ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -305,18 +316,18 @@ export default function HeatmapPage() {
   const stats = useMemo(() => {
     const expired = allBatches.filter(b => b.daysUntilExpiry <= 0);
     const week7   = allBatches.filter(b => b.daysUntilExpiry > 0  && b.daysUntilExpiry <= 7);
-    const month30 = allBatches.filter(b => b.daysUntilExpiry > 7  && b.daysUntilExpiry <= 30);
+    const monthN  = allBatches.filter(b => b.daysUntilExpiry > 7  && b.daysUntilExpiry <= nearExpiryDays);
     const safe    = allBatches.filter(b => b.daysUntilExpiry > 90);
     return {
       expiredCount: expired.length,
       expiredVal:   expired.reduce((s, b) => s + b.valueAtRisk, 0),
       weekCount:    week7.length,
       weekVal:      week7.reduce((s, b) => s + b.valueAtRisk, 0),
-      monthCount:   month30.length,
-      monthVal:     month30.reduce((s, b) => s + b.valueAtRisk, 0),
+      monthCount:   monthN.length,
+      monthVal:     monthN.reduce((s, b) => s + b.valueAtRisk, 0),
       safeCount:    safe.length,
     };
-  }, [allBatches]);
+  }, [allBatches, nearExpiryDays]);
 
   /** Batches expiring on the selected day (respects filters). */
   const dayBatches = useMemo(() => {
@@ -398,7 +409,7 @@ export default function HeatmapPage() {
         />
         <StatCard
           icon={<Clock size={16} className="text-yellow-500" />}
-          label="Expiring in 30 Days"
+          label={`Expiring in ${nearExpiryDays} Days`}
           count={stats.monthCount}
           sub={`₹${inr(stats.monthVal)} at risk`}
           border="border-yellow-100"
@@ -564,7 +575,7 @@ export default function HeatmapPage() {
               <>
                 <div className="space-y-3 flex-1 overflow-y-auto max-h-[420px] pr-1">
                   {dayBatches.map(b => {
-                    const si = statusInfo(b.daysUntilExpiry);
+                    const si = statusInfo(b.daysUntilExpiry, nearExpiryDays);
                     return (
                       <div
                         key={b.batchId}
@@ -683,7 +694,7 @@ export default function HeatmapPage() {
 
               <tbody className="divide-y divide-gray-50 dark:divide-slate-700">
                 {tableRows.map(b => {
-                  const si = statusInfo(b.daysUntilExpiry);
+                  const si = statusInfo(b.daysUntilExpiry, nearExpiryDays);
                   return (
                     <tr
                       key={b.batchId}

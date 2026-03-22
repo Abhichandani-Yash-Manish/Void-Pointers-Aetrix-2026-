@@ -466,7 +466,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700">
             <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Recent Dispenses</h2>
             <button
-              onClick={() => navigate('/dispense')}
+              onClick={() => navigate('/history')}
               className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
             >
               View All <ChevronRight size={13} />

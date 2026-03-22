@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   collection, doc, onSnapshot, getDocs, writeBatch,
-  addDoc, updateDoc, increment,
+  addDoc, updateDoc, deleteDoc,
 } from 'firebase/firestore';
 import { format, differenceInDays, parseISO, isPast } from 'date-fns';
 import {
@@ -99,14 +99,22 @@ function BatchTable({
   drugId: string; drugName: string; batches: Batch[];
   batchLoading: boolean; isAdmin: boolean;
 }) {
-  const [showAdd, setShowAdd]   = useState(false);
-  const [form, setForm]         = useState(BLANK_BATCH);
-  const [saving, setSaving]     = useState(false);
-  const [formErr, setFormErr]   = useState('');
+  const [showAdd, setShowAdd]           = useState(false);
+  const [form, setForm]                 = useState(BLANK_BATCH);
+  const [saving, setSaving]             = useState(false);
+  const [formErr, setFormErr]           = useState('');
+  const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
 
   const sorted = [...batches].sort(
     (a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime(),
   );
+
+  /** Recalculate currentStock by summing all batch quantities for this drug. */
+  async function recalcStock() {
+    const snap = await getDocs(collection(db, 'drugs', drugId, 'batches'));
+    const total = snap.docs.reduce((sum, b) => sum + (b.data().quantity as number), 0);
+    await updateDoc(doc(db, 'drugs', drugId), { currentStock: total });
+  }
 
   const handleAdd = async () => {
     const qty = parseInt(form.quantity, 10);
@@ -125,10 +133,24 @@ function BatchTable({
         quantity: qty, expiryDate: form.expiryDate,
         receivedDate: form.receivedDate, costPerUnit: cost,
       });
-      await updateDoc(doc(db, 'drugs', drugId), { currentStock: increment(qty) });
+      // Recalculate from all batches to prevent denormalization drift
+      await recalcStock();
       setForm(BLANK_BATCH); setShowAdd(false);
     } catch (err) { console.error('Add batch:', err); setFormErr('Failed to save batch.'); }
     finally { setSaving(false); }
+  };
+
+  const handleDeleteBatch = async (batchId: string) => {
+    setDeletingBatchId(batchId);
+    try {
+      await deleteDoc(doc(db, 'drugs', drugId, 'batches', batchId));
+      // Recalculate from remaining batches to prevent denormalization drift
+      await recalcStock();
+    } catch (err) {
+      console.error('Delete batch:', err);
+    } finally {
+      setDeletingBatchId(null);
+    }
   };
 
   if (batchLoading) {
@@ -173,6 +195,7 @@ function BatchTable({
                     {h}
                   </th>
                 ))}
+                {isAdmin && <th className="px-5 py-2" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
@@ -194,6 +217,20 @@ function BatchTable({
                     <td className="px-5 py-2.5 text-right font-medium text-slate-700 dark:text-slate-200">
                       {formatINR(batch.quantity * batch.costPerUnit)}
                     </td>
+                    {isAdmin && (
+                      <td className="px-5 py-2.5 text-right">
+                        <button
+                          onClick={() => handleDeleteBatch(batch.id)}
+                          disabled={deletingBatchId === batch.id}
+                          title="Delete batch"
+                          className="p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 transition-colors"
+                        >
+                          {deletingBatchId === batch.id
+                            ? <Loader2 size={13} className="animate-spin" />
+                            : <Trash2 size={13} />}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

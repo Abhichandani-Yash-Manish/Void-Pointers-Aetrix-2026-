@@ -452,62 +452,66 @@ export default function ForecastPage() {
     const allDates  = [...histDates, ...predDates];
     const labels    = allDates.map(d => format(parseISO(d), 'dd MMM'));
 
-    const histQtys  = allDates.map(d => histDates.includes(d)
-      ? selectedHistory.find(h => h.date === d)!.quantity
-      : null);
+    const n = selectedHistory.length;
+    const { slope, intercept } = selectedPred.metrics;
 
-    const predQtys  = allDates.map(d => {
+    // Dataset 1: historical scatter points (null for prediction weeks)
+    const histPoints = allDates.map(d =>
+      histDates.includes(d)
+        ? selectedHistory.find(h => h.date === d)!.quantity
+        : null,
+    );
+
+    // Dataset 2: regression trend line — two endpoints spanning the historical period
+    // Uses slope/intercept from the Flask model (week-index x-axis: 0, 1, …, n-1)
+    const trendLine = allDates.map((_, i) =>
+      i < n ? +(intercept + slope * i).toFixed(2) : null,
+    );
+
+    // Dataset 3: prediction points (null for historical weeks)
+    const predPoints = allDates.map(d => {
       const p = selectedPred.predictions.find(x => x.date === d);
       return p ? p.predicted_quantity : null;
     });
 
-    const upper = predQtys.map(v => v !== null ? +(v * 1.15).toFixed(2) : null);
-    const lower = predQtys.map(v => v !== null ? +(v * 0.85).toFixed(2) : null);
-
     const datasets: any[] = [
       {
-        label:           'Historical Demand',
-        data:            histQtys,
-        borderColor:     'rgb(59, 130, 246)',
-        backgroundColor: 'rgba(59, 130, 246, 0.07)',
-        borderWidth:     2.5,
-        pointRadius:     3,
-        pointHoverRadius: 5,
-        tension:         0.35,
-        spanGaps:        false,
-        fill:            false,
+        // Scatter dots for historical data — no connecting line
+        label:                'Historical demand',
+        data:                 histPoints,
+        showLine:             false,
+        pointRadius:          4,
+        pointHoverRadius:     6,
+        pointBackgroundColor: 'rgb(59, 130, 246)',
+        pointBorderColor:     'rgb(59, 130, 246)',
+        spanGaps:             false,
       },
-      // Lower confidence bound — acts as base for fill area
       {
-        label:       '_lower',
-        data:        lower,
-        borderColor: 'transparent',
+        // Thin trend line through the historical period (slope from ML model)
+        label:       'Trend',
+        data:        trendLine,
+        borderColor: 'rgba(59, 130, 246, 0.3)',
+        borderWidth: 1.5,
         pointRadius: 0,
         fill:        false,
         spanGaps:    false,
-      },
-      // Upper confidence bound — fills DOWN to lower bound
-      {
-        label:           '_upper',
-        data:            upper,
-        borderColor:     'transparent',
-        backgroundColor: 'rgba(249, 115, 22, 0.12)',
-        pointRadius:     0,
-        fill:            '-1',
-        spanGaps:        false,
+        tension:     0,
       },
       {
-        label:            'Predicted Demand',
-        data:             predQtys,
-        borderColor:      'rgb(249, 115, 22)',
-        backgroundColor:  'rgba(249, 115, 22, 0.08)',
-        borderWidth:      2.5,
-        borderDash:       [7, 4],
-        pointRadius:      4,
-        pointHoverRadius: 6,
-        tension:          0.35,
-        fill:             false,
-        spanGaps:         false,
+        // Dashed prediction line with amber dots
+        label:                'Predicted demand',
+        data:                 predPoints,
+        borderColor:          'rgb(245, 158, 11)',
+        backgroundColor:      'rgba(245, 158, 11, 0.1)',
+        borderDash:           [6, 4],
+        borderWidth:          2,
+        pointRadius:          5,
+        pointHoverRadius:     7,
+        pointBackgroundColor: 'rgb(245, 158, 11)',
+        pointBorderColor:     'rgb(245, 158, 11)',
+        fill:                 false,
+        spanGaps:             false,
+        tension:              0,
       },
     ];
 
@@ -517,43 +521,54 @@ export default function ForecastPage() {
   const heroChartOptions: any = useMemo(() => ({
     responsive:          true,
     maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: {
+        display:  true,
+        position: 'top' as const,
         labels: {
-          filter:   (item: any) => !item.text.startsWith('_'),
-          boxWidth: 20,
-          font:     { size: 12 },
+          usePointStyle: true,
+          font:          { size: 12 },
+          color:         '#475569',
+          padding:       16,
         },
       },
       title: {
         display: true,
         text:    selectedDrug ? `${selectedDrug.name} — Demand Forecast` : '',
-        font:    { size: 14, weight: 'bold' },
+        font:    { size: 14, weight: 'bold' as const },
         color:   '#1e293b',
         padding: { bottom: 12 },
       },
       tooltip: {
-        filter:    (item: any)  => !item.dataset.label.startsWith('_'),
+        mode:      'nearest' as const,
+        intersect: true,
         callbacks: {
           label: (ctx: any) => {
-            if (ctx.dataset.label.startsWith('_')) return '';
             const v = ctx.parsed.y;
-            return v !== null ? `${ctx.dataset.label}: ${v.toFixed(1)}` : '';
+            if (v === null || v === undefined) return '';
+            if (ctx.dataset.label === 'Historical demand')
+              return `Week of ${ctx.label}: ${v} units`;
+            if (ctx.dataset.label === 'Predicted demand')
+              return `Predicted: ${v.toFixed(1)} units`;
+            // Trend line tooltip — shown on hover but kept minimal
+            return `Trend: ${v.toFixed(1)} units`;
           },
         },
       },
     },
     scales: {
       x: {
-        grid:  { display: false },
-        ticks: { maxTicksLimit: 12, font: { size: 11 } },
+        grid:   { display: false },
+        ticks:  { maxTicksLimit: 12, font: { size: 11 }, color: '#94a3b8' },
+        border: { display: false },
+        title:  { display: true, text: 'Week', font: { size: 11 }, color: '#94a3b8' },
       },
       y: {
         beginAtZero: true,
         grid:        { color: 'rgba(0,0,0,0.05)' },
-        ticks:       { font: { size: 11 } },
-        title:       { display: true, text: 'Weekly Qty', font: { size: 11 } },
+        ticks:       { font: { size: 11 }, color: '#94a3b8' },
+        border:      { display: false },
+        title:       { display: true, text: 'Units dispensed', font: { size: 11 }, color: '#94a3b8' },
       },
     },
   }), [selectedDrug]);
@@ -743,14 +758,14 @@ export default function ForecastPage() {
                   data={{
                     labels:   selectedHistory.map(h => format(parseISO(h.date), 'dd MMM')),
                     datasets: [{
-                      label:           'Historical Demand',
-                      data:            selectedHistory.map(h => h.quantity),
-                      borderColor:     'rgb(59, 130, 246)',
-                      backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                      borderWidth:     2.5,
-                      pointRadius:     3,
-                      tension:         0.35,
-                      fill:            false,
+                      label:                'Historical demand',
+                      data:                 selectedHistory.map(h => h.quantity),
+                      showLine:             false,
+                      pointRadius:          4,
+                      pointHoverRadius:     6,
+                      pointBackgroundColor: 'rgb(59, 130, 246)',
+                      pointBorderColor:     'rgb(59, 130, 246)',
+                      spanGaps:             false,
                     }],
                   } as any}
                   options={{

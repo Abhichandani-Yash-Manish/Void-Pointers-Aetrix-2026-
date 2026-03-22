@@ -3,6 +3,7 @@ import {
   collection,
   doc,
   getDocs,
+  getDoc,
   onSnapshot,
   query,
   where,
@@ -122,6 +123,17 @@ export default function DispensePage() {
   // ── UI state ───────────────────────────────────────────────────────────────
   const [toast, setToast]             = useState<Toast | null>(null);
   const [fefoTraining, setFefoTraining] = useState(false);
+  const [nearExpiryDays, setNearExpiryDays] = useState(30);
+
+  // ── Fetch near-expiry threshold from Firestore config ──────────────────────
+  useEffect(() => {
+    getDoc(doc(db, 'config', 'settings')).then(snap => {
+      if (snap.exists()) {
+        const days = snap.data().nearExpiryDays as number;
+        if (days && days > 0) setNearExpiryDays(days);
+      }
+    }).catch(console.error);
+  }, []);
 
   // ── Fetch all drugs on mount ───────────────────────────────────────────────
   useEffect(() => {
@@ -220,7 +232,7 @@ export default function DispensePage() {
     for (const batch of remaining) {
       if (batch.quantity <= 0 || isExpired(batch.expiryDate)) continue;
       const daysLeft = daysUntilExpiry(batch.expiryDate);
-      if (daysLeft <= 30) {
+      if (daysLeft <= nearExpiryDays) {
         if (!(await alertExists('near_expiry', drug.id))) {
           await addDoc(collection(db, 'alerts'), {
             type: 'near_expiry',
@@ -276,15 +288,21 @@ export default function DispensePage() {
         });
       }
 
-      // Decrement drug's currentStock
+      // Use totalAvailStock (live onSnapshot, non-expired batches only) instead of
+      // selectedDrug.currentStock, which is a denormalized field that can include
+      // expired batch quantities — causing newStock to be inflated and
+      // `newStock <= reorderLevel` to never trigger a low_stock alert.
+      const newStock = totalAvailStock - totalDeducted;
+
+      // Write the accurate absolute value rather than incrementing a potentially
+      // stale/inflated currentStock field.
       batch.update(doc(db, 'drugs', selectedDrug.id), {
-        currentStock: increment(-totalDeducted),
+        currentStock: newStock,
       });
 
       await batch.commit();
 
       // Post-commit: alert generation (reads → separate from the batch write)
-      const newStock = selectedDrug.currentStock - totalDeducted;
       const remainingBatches = batches.map(b => ({
         ...b,
         quantity: remainingMap[b.id] ?? b.quantity,

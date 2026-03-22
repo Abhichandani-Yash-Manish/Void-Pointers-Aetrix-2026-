@@ -9,6 +9,8 @@ import {
   writeBatch,
   getDocs,
   where,
+  getDoc,
+  setDoc,
 } from 'firebase/firestore';
 import {
   formatDistanceToNow,
@@ -36,6 +38,8 @@ import {
   CheckCheck,
   BarChart2,
   ShieldCheck,
+  SlidersHorizontal,
+  Loader2,
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -48,6 +52,7 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import { db } from '../../config/firebase';
+import { useAuth } from '../../hooks/useAuth';
 import type { Alert } from '../../types';
 
 // ── Register Chart.js components ──────────────────────────────────────────────
@@ -138,6 +143,16 @@ export default function AlertsPage() {
   const [processing, setProcessing]   = useState(false);
   const [showStats, setShowStats]     = useState(false);
 
+  // ── Settings state ─────────────────────────────────────────────────────────
+  const [nearExpiryDays,  setNearExpiryDays]  = useState(30);
+  const [settingsInput,   setSettingsInput]   = useState('30');
+  const [settingsSaving,  setSettingsSaving]  = useState(false);
+  const [settingsSaved,   setSettingsSaved]   = useState(false);
+  const [showSettings,    setShowSettings]    = useState(false);
+
+  const { profile } = useAuth();
+  const canEditSettings = profile?.role === 'manager' || profile?.role === 'admin';
+
   // ── Real-time listener ─────────────────────────────────────────────────────
   useEffect(() => {
     const unsub = onSnapshot(
@@ -152,6 +167,19 @@ export default function AlertsPage() {
       },
     );
     return unsub;
+  }, []);
+
+  // ── Fetch near-expiry threshold from Firestore config ──────────────────────
+  useEffect(() => {
+    getDoc(doc(db, 'config', 'settings')).then(snap => {
+      if (snap.exists()) {
+        const days = snap.data().nearExpiryDays as number;
+        if (days && days > 0) {
+          setNearExpiryDays(days);
+          setSettingsInput(String(days));
+        }
+      }
+    }).catch(console.error);
   }, []);
 
   // ── Derived counts ─────────────────────────────────────────────────────────
@@ -264,6 +292,23 @@ export default function AlertsPage() {
   function handleConfirm() {
     if (confirmKind === 'mark_all')        markAllRead();
     else if (confirmKind === 'clear_read') clearRead();
+  }
+
+  // ── Save near-expiry threshold to Firestore config ─────────────────────────
+  async function saveSettings() {
+    const days = parseInt(settingsInput, 10);
+    if (!days || days < 1 || days > 365) return;
+    setSettingsSaving(true);
+    try {
+      await setDoc(doc(db, 'config', 'settings'), { nearExpiryDays: days }, { merge: true });
+      setNearExpiryDays(days);
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 2500);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSettingsSaving(false);
+    }
   }
 
   // ── Chart data (last 7 days) ───────────────────────────────────────────────
@@ -386,6 +431,59 @@ export default function AlertsPage() {
           </button>
         ))}
       </div>
+
+      {/* ── Alert Settings (manager / admin only) ────────────────────────── */}
+      {canEditSettings && (
+        <div className="mb-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+          <button
+            onClick={() => setShowSettings(v => !v)}
+            className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <SlidersHorizontal size={15} className="text-slate-400 dark:text-slate-500" />
+              Alert Settings
+            </div>
+            {showSettings
+              ? <ChevronUp   size={15} className="text-slate-400 dark:text-slate-500" />
+              : <ChevronDown size={15} className="text-slate-400 dark:text-slate-500" />}
+          </button>
+
+          {showSettings && (
+            <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-700">
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 shrink-0">
+                  Near-expiry threshold (days)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={settingsInput}
+                  onChange={e => setSettingsInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveSettings()}
+                  className="w-20 px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={saveSettings}
+                  disabled={settingsSaving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                >
+                  {settingsSaving && <Loader2 size={13} className="animate-spin" />}
+                  Save
+                </button>
+                {settingsSaved && (
+                  <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                    <CheckCircle2 size={13} /> Saved
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+                Near-expiry alerts trigger when batches expire within {nearExpiryDays} day{nearExpiryDays !== 1 ? 's' : ''}.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Smart Throttling Banner ───────────────────────────────────────── */}
       <div className="mb-5 flex items-start gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3">
