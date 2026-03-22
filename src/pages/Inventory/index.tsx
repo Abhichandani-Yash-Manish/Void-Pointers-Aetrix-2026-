@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   collection, doc, onSnapshot, getDocs, writeBatch,
-  addDoc, updateDoc, deleteDoc, increment,
+  addDoc, updateDoc, increment,
 } from 'firebase/firestore';
 import { format, differenceInDays, parseISO, isPast } from 'date-fns';
 import {

@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Package,
   ClipboardList,
+  History,
   Bell,
   TrendingUp,
   Map,
@@ -36,6 +37,7 @@ const navItems: NavItem[] = [
     icon: <ClipboardList size={18} />,
     roles: ['pharmacist', 'admin'],
   },
+  { to: '/history', label: 'Dispense History', icon: <History size={18} /> },
   { to: '/alerts', label: 'Alerts', icon: <Bell size={18} /> },
   {
     to: '/forecast',

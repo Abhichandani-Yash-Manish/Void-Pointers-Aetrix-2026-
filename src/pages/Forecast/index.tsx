@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { startOfWeek, format, parseISO, subMonths, isAfter } from 'date-fns';
 import {
@@ -40,6 +40,7 @@ ChartJS.register(
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const FETCH_TIMEOUT = 5000; // ms before marking backend unreachable
+const MAX_RETRIES   = 6;    // 6 × 10 s = 60 s max wait for Render cold start
 
 // ── Local types ───────────────────────────────────────────────────────────────
 
@@ -295,8 +296,12 @@ export default function ForecastPage() {
   // ── State ──────────────────────────────────────────────────────────────────
   const [drugs, setDrugs]                 = useState<Drug[]>([]);
   const [loading, setLoading]             = useState(true);
-  const [backendStatus, setBackendStatus] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'retrying' | 'connected' | 'failed'>('checking');
+  const [retryCount, setRetryCount]       = useState(0);
+  const [countdown, setCountdown]         = useState(10);
+  const [showConnected, setShowConnected] = useState(false);
   const [retryKey, setRetryKey]           = useState(0);
+  const retryAttemptRef                   = useRef(0);
 
   const [weeklyHistory, setWeeklyHistory] = useState<Map<string, WeeklyPoint[]>>(new Map());
   const [predMap, setPredMap]             = useState<Map<string, PredictionResult>>(new Map());
@@ -308,7 +313,7 @@ export default function ForecastPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    setBackendStatus('loading');
+    setBackendStatus('checking');
 
     async function load() {
       try {
@@ -364,11 +369,18 @@ export default function ForecastPage() {
           if (isPredictionResult(item)) newMap.set(item.drugId, item);
         }
         setPredMap(newMap);
-        setBackendStatus('ok');
+        retryAttemptRef.current = 0;
+        setBackendStatus('connected');
       } catch (err) {
         if (cancelled) return;
         console.warn('Forecast backend unreachable:', err);
-        setBackendStatus('error');
+        retryAttemptRef.current += 1;
+        if (retryAttemptRef.current > MAX_RETRIES) {
+          setBackendStatus('failed');
+        } else {
+          setRetryCount(retryAttemptRef.current);
+          setBackendStatus('retrying');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -377,6 +389,31 @@ export default function ForecastPage() {
     load();
     return () => { cancelled = true; };
   }, [retryKey]);
+
+  // ── Auto-retry countdown ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (backendStatus !== 'retrying') return;
+    setCountdown(10);
+    const interval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setRetryKey(k => k + 1);
+          return 10;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [backendStatus]);
+
+  // ── Flash "connected" banner for 2 s then dismiss ─────────────────────────
+  useEffect(() => {
+    if (backendStatus !== 'connected') return;
+    setShowConnected(true);
+    const t = setTimeout(() => setShowConnected(false), 2000);
+    return () => clearTimeout(t);
+  }, [backendStatus]);
 
   // ── Derived / computed values ──────────────────────────────────────────────
   const selectedDrug = useMemo(
@@ -522,29 +559,62 @@ export default function ForecastPage() {
   }), [selectedDrug]);
 
   // ── Render states ──────────────────────────────────────────────────────────
-  if (loading) return <LoadingSkeleton />;
+  // Show skeleton only on initial mount (before any drugs are loaded).
+  // On retries, keep the page structure visible so the banner is readable.
+  if (loading && drugs.length === 0) return <LoadingSkeleton />;
 
-  // ── Shared backend-error banner ────────────────────────────────────────────
-  const BackendBanner = backendStatus === 'error' ? (
-    <div className="mb-5 flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3.5">
-      <Terminal size={17} className="text-red-500 mt-0.5 shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-red-700">ML Backend not running</p>
-        <p className="text-xs text-red-600 mt-0.5 font-mono bg-red-100 rounded px-2 py-1 inline-block mt-1">
-          cd backend &amp;&amp; python app.py
-        </p>
-        <p className="text-xs text-red-600 mt-1">
-          Historical data is shown below. Predictions will appear once the backend is started.
+  // ── Backend status banner (replaces static error message) ─────────────────
+  const BackendBanner = (() => {
+    if (backendStatus === 'retrying') return (
+      <div className="mb-5 flex items-start gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3.5">
+        <Loader2 size={17} className="text-amber-500 dark:text-amber-400 mt-0.5 shrink-0 animate-spin" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+            ML Backend is starting up…
+          </p>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+            Render.com free tier has a 30–50 s cold start. Retrying in{' '}
+            <span className="font-bold tabular-nums">{countdown}s</span>
+          </p>
+          <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+            Attempt {retryCount} of {MAX_RETRIES} — historical data shown below while waiting
+          </p>
+        </div>
+      </div>
+    );
+    if (showConnected) return (
+      <div className="mb-5 flex items-center gap-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3.5">
+        <CheckCircle2 size={17} className="text-green-500 dark:text-green-400 shrink-0" />
+        <p className="text-sm font-semibold text-green-800 dark:text-green-300">
+          Backend connected! Loading predictions…
         </p>
       </div>
-      <button
-        onClick={() => { setRetryKey(k => k + 1); setLoading(true); }}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-700 border border-red-300 rounded-lg hover:bg-red-100 transition-colors shrink-0"
-      >
-        <RefreshCw size={13} /> Retry
-      </button>
-    </div>
-  ) : null;
+    );
+    if (backendStatus === 'failed') return (
+      <div className="mb-5 flex items-start gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3.5">
+        <Terminal size={17} className="text-red-500 dark:text-red-400 mt-0.5 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+            ML Backend could not be reached
+          </p>
+          <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+            Please ensure the backend is running and refresh the page. Historical data is shown below.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            retryAttemptRef.current = 0;
+            setRetryCount(0);
+            setRetryKey(k => k + 1);
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors shrink-0"
+        >
+          <RefreshCw size={13} /> Retry
+        </button>
+      </div>
+    );
+    return null;
+  })();
 
   // ── Main render ────────────────────────────────────────────────────────────
   return (
@@ -561,7 +631,7 @@ export default function ForecastPage() {
       {BackendBanner}
 
       {/* ── Summary banner (overview only) ───────────────────────────────── */}
-      {selectedId === null && backendStatus === 'ok' && (
+      {selectedId === null && backendStatus === 'connected' && (
         <div className="grid grid-cols-3 gap-3 mb-5">
           {[
             { icon: <AlertTriangle size={16} className="text-red-500" />,   bg: 'bg-red-50 border-red-200',    label: 'Needs Reorder',   value: needsReorder },
@@ -647,7 +717,7 @@ export default function ForecastPage() {
               <div>
                 <p className="text-sm font-semibold text-amber-800">No ML prediction available</p>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  {backendStatus === 'error'
+                  {backendStatus === 'failed'
                     ? 'Start the backend to generate predictions.'
                     : 'This drug may have fewer than 4 weeks of dispense history.'}
                 </p>
@@ -916,20 +986,30 @@ export default function ForecastPage() {
 
         {/* Backend status footer */}
         <div className="px-5 py-3 border-t border-slate-100 flex items-center gap-2">
-          {backendStatus === 'loading' && (
+          {backendStatus === 'checking' && (
             <><Loader2 size={13} className="animate-spin text-blue-500" />
-              <span className="text-xs text-slate-500">Loading ML predictions…</span></>
+              <span className="text-xs text-slate-500">Checking ML backend…</span></>
           )}
-          {backendStatus === 'ok' && (
+          {backendStatus === 'retrying' && (
+            <><Loader2 size={13} className="animate-spin text-amber-500" />
+              <span className="text-xs text-slate-500">
+                Backend starting up — retrying in {countdown}s (attempt {retryCount}/{MAX_RETRIES})
+              </span></>
+          )}
+          {backendStatus === 'connected' && (
             <><CheckCircle2 size={13} className="text-green-500" />
               <span className="text-xs text-slate-500">ML predictions loaded — LinearRegression model</span></>
           )}
-          {backendStatus === 'error' && (
+          {backendStatus === 'failed' && (
             <><AlertTriangle size={13} className="text-red-500" />
               <span className="text-xs text-slate-500">
                 Showing historical data only.{' '}
                 <button
-                  onClick={() => { setRetryKey(k => k + 1); setLoading(true); }}
+                  onClick={() => {
+                    retryAttemptRef.current = 0;
+                    setRetryCount(0);
+                    setRetryKey(k => k + 1);
+                  }}
                   className="text-blue-600 hover:underline font-medium"
                 >
                   Retry backend

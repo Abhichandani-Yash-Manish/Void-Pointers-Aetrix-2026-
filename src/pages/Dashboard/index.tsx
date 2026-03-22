@@ -4,7 +4,7 @@ import {
   collection, onSnapshot, getDocs, query, where, limit,
 } from 'firebase/firestore';
 import {
-  format, formatDistanceToNow, startOfToday, subDays, isSameDay, parseISO,
+  format, formatDistanceToNow, subDays, isSameDay, parseISO,
 } from 'date-fns';
 import {
   Package, AlertTriangle, Clock, Activity, Bell,

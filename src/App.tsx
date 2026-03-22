@@ -12,6 +12,7 @@ import ForecastPage from './pages/Forecast';
 import HeatmapPage from './pages/Heatmap';
 import WasteCalcPage from './pages/WasteCalc';
 import ReportPage from './pages/Report';
+import DispenseHistoryPage from './pages/DispenseHistory';
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -60,6 +61,17 @@ export default function App() {
               <ProtectedRoute allowedRoles={['pharmacist', 'admin']}>
                 <AppLayout>
                   <DispensePage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/history"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <DispenseHistoryPage />
                 </AppLayout>
               </ProtectedRoute>
             }
