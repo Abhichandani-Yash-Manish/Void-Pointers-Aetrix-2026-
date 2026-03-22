@@ -1,4 +1,4 @@
-# PharmaGuard Gujarat
+# PharmaGuard Gujarat by Team-Void Pointers
 
 **AI-Powered Pharmacy Management System for Gujarat Government Hospitals**
 
@@ -656,26 +656,14 @@ Paracetamol 500mg, Amoxicillin 500mg, Metformin 500mg, Amlodipine 5mg, Omeprazol
 
 ---
 
-## Screenshots
-
-| Page | Preview |
-|---|---|
-| Login | [Login Screenshot] |
-| Dashboard | [Dashboard Screenshot] |
-| Inventory | [Inventory Screenshot] |
-| Batch Management | [Batch Management Screenshot] |
-| Dispense | [Dispense Screenshot] |
-| Alerts | [Alerts Screenshot] |
-| Demand Forecast | [Forecast Screenshot] |
-| Expiry Heatmap | [Heatmap Screenshot] |
-| Waste Calculator | [Waste Calculator Screenshot] |
-| PDF Report | [Report Screenshot] |
-
----
-
 ## Team
 
 Built by **Void Pointers** — Aetrix 2026 Hackathon
+
+Yash Abhichandani = Fullstack dev
+Dhvanit Chauhan = Backend Architect
+Priyanka Nair = Frontend dev
+Mahek Charan = Frontend dev
 
 ---
 
